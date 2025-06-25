@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AnimeMusic - Plataforma de Músicas de Anime",
+  title: "AniSongs - Plataforma de Músicas de Anime",
   description: "Descubra, ouça, avalie e organize as melhores músicas de animes.",
 };
 

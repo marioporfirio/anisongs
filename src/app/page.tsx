@@ -33,6 +33,7 @@ interface ThemeCardProps {
 
 // Componente ThemeCard original (não memoizado diretamente aqui)
 function ThemeCardComponent({ theme, onPlay, isLoggedIn }: ThemeCardProps) {
+  console.log(`ThemeCardComponent for ${theme.song?.title}: isLoggedIn = ${isLoggedIn}`); // Log isLoggedIn
   if (!theme.anime) return null;
   const video = theme.animethemeentries[0]?.videos[0];
   const posterImage = theme.anime.images.find(img => img.facet === 'poster') ||
@@ -85,6 +86,7 @@ function HomePageContent() {
   useEffect(() => {
     const getSession = async () => {
       const { data } = await supabase.auth.getSession();
+      console.log("Fetched session in HomePageContent:", data.session); // Log session
       setSession(data.session);
     };
     getSession();
