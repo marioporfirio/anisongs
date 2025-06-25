@@ -16,6 +16,9 @@ function ThemeItem({ theme, animeSlug, isLoggedIn, onPlay }: { theme: ThemeWithR
             <div>
                 <span className="font-bold text-indigo-400 text-sm">{theme.slug.toUpperCase()}</span>
                 <p className="text-lg text-white">{theme.song?.title || "Título Desconhecido"}</p>
+                {theme.song?.artists && theme.song.artists.length > 0 && (
+                  <p className="text-sm text-gray-400">{theme.song.artists.map(artist => artist.name).join(', ')}</p>
+                )}
             </div>
             {video && (
             <button onClick={() => onPlay(video.link)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-500 transition-colors flex-shrink-0 ml-4 sm:hidden">▶</button>

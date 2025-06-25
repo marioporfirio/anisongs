@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useCallback, memo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,17 +15,26 @@ import AddToPlaylistButton from "@/components/AddToPlaylistButton"; // Importa o
 // Tipagens
 interface Video { basename: string; link: string; }
 interface AnimeThemeEntry { videos: Video[]; }
-interface ImageType { facet: 'poster' | 'cover'; link: string; }
+interface ImageType { facet: 'poster' | 'cover' | 'Large Cover' | 'Small Cover'; link: string; }
 interface Song { title: string; }
 interface Anime { name: string; slug: string; images: ImageType[]; animethemes?: AnimeTheme[]; }
 interface AnimeTheme { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; anime: Anime | null; }
 interface ApiThemeResponse { animethemes: AnimeTheme[]; }
 
-// Componente Card MODIFICADO para incluir o botão de playlist
-function ThemeCard({ theme, onPlay, isLoggedIn }: { theme: AnimeTheme; onPlay: (url: string, event?: React.MouseEvent) => void; isLoggedIn: boolean; }) {
-  if (!theme.anime) return null; 
+// Props para o ThemeCard
+interface ThemeCardProps {
+  theme: AnimeTheme;
+  onPlay: (url: string, event?: React.MouseEvent) => void;
+  isLoggedIn: boolean;
+}
+
+// Componente ThemeCard original (não memoizado diretamente aqui)
+function ThemeCardComponent({ theme, onPlay, isLoggedIn }: ThemeCardProps) {
+  if (!theme.anime) return null;
   const video = theme.animethemeentries[0]?.videos[0];
-  const posterImage = theme.anime.images.find(img => img.facet === 'poster');
+  const posterImage = theme.anime.images.find(img => img.facet === 'poster') ||
+                    theme.anime.images.find(img => img.facet === 'Large Cover') ||
+                    theme.anime.images.find(img => img.facet === 'Small Cover');
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden shadow-lg group h-full flex flex-col">
       <div className="relative w-full h-40 overflow-hidden bg-black flex-shrink-0">
@@ -39,13 +48,16 @@ function ThemeCard({ theme, onPlay, isLoggedIn }: { theme: AnimeTheme; onPlay: (
           <p className="text-sm text-gray-400 truncate" title={theme.anime.name}>{theme.anime.name}</p>
           <p className="text-xs text-indigo-400 font-semibold mt-1">{theme.slug.toUpperCase()}</p>
         </div>
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-end mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
           {isLoggedIn && <AddToPlaylistButton themeId={theme.id} />}
         </div>
       </div>
     </div>
   );
 }
+
+// Componente ThemeCard memoizado
+const ThemeCard = memo(ThemeCardComponent);
 
 // Componente principal da página MODIFICADO
 function HomePageContent() {
@@ -115,9 +127,12 @@ function HomePageContent() {
     fetchFilteredThemes();
   }, [searchParams]);
 
-  const handlePlay = (url: string, event?: React.MouseEvent) => { event?.preventDefault(); setSelectedVideoUrl(url); };
+  const handlePlay = useCallback((url: string, event?: React.MouseEvent) => {
+    event?.preventDefault();
+    setSelectedVideoUrl(url);
+  }, []); // setSelectedVideoUrl é estável
   
-  const handleFilterChange = (filters: { year: string; season: string; type: string }) => {
+  const handleFilterChange = useCallback((filters: { year: string; season: string; type: string }) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
     if (!filters.year) current.delete('year'); else current.set('year', filters.year);
     if (!filters.season) current.delete('season'); else current.set('season', filters.season);
@@ -125,7 +140,11 @@ function HomePageContent() {
     const search = current.toString();
     const query = search ? `?${search}` : "";
     router.push(`${pathname}${query}`, { scroll: false });
-  };
+  }, [searchParams, router, pathname]);
+
+  const closeModal = useCallback(() => {
+    setSelectedVideoUrl(null);
+  }, []); // setSelectedVideoUrl é estável
 
   const renderFilteredContent = () => {
     // ... (lógica de renderização permanece a mesma)
@@ -156,7 +175,7 @@ function HomePageContent() {
       <div className="container mx-auto p-4 md:p-6">
         {renderFilteredContent()}
       </div>
-      <VideoPlayerModal videoUrl={selectedVideoUrl} onClose={() => setSelectedVideoUrl(null)} />
+      <VideoPlayerModal videoUrl={selectedVideoUrl} onClose={closeModal} />
     </>
   );
 }

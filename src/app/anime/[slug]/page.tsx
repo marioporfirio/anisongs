@@ -9,13 +9,25 @@ export interface RatingData { average_score: number | null; rating_count: number
 export interface ThemeWithRating extends AnimeThemeForDetail { ratingData: RatingData; }
 interface Video { link: string; }
 interface AnimeThemeEntry { videos: Video[]; }
-interface Song { title: string; }
+
+// Nova interface para Artist
+interface Artist {
+  id: number;
+  name: string;
+  slug: string; // Adicionando slug caso seja útil para links futuros
+}
+
+interface Song {
+  title: string;
+  artists?: Artist[]; // Array de artistas, opcional
+}
+
 export interface AnimeThemeForDetail { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; }
-interface AnimeDetail { name: string; synopsis: string; year: number; season: string; images: Array<{ facet: 'poster' | 'cover', link: string }>; animethemes: AnimeThemeForDetail[]; }
+interface AnimeDetail { name: string; synopsis: string; year: number; season: string; images: Array<{ facet: 'poster' | 'cover' | 'Large Cover' | 'Small Cover', link: string }>; animethemes: AnimeThemeForDetail[]; }
 
 // Função para buscar dados da API externa
 async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
-    const API_URL = `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.animethemeentries.videos`;
+    const API_URL = `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
     const response = await fetch(API_URL, { next: { revalidate: 3600 } });
     if (!response.ok) { throw new Error('Falha ao buscar dados do anime da API externa.'); }
     const data = await response.json();
@@ -56,7 +68,9 @@ export default async function AnimeDetailPage(props: { params: { slug: string } 
   ]);
 
   const user = userResponse.data.user;
-  const posterImage = anime.images.find(img => img.facet === 'poster');
+  const posterImage = anime.images.find(img => img.facet === 'poster') ||
+                    anime.images.find(img => img.facet === 'Large Cover') ||
+                    anime.images.find(img => img.facet === 'Small Cover');
 
   const themesWithRatings = await Promise.all(
     anime.animethemes.map(async (theme): Promise<ThemeWithRating> => {
