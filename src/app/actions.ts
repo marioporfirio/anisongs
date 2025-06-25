@@ -1,34 +1,38 @@
 // src/app/actions.ts
 'use server'
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-function createSupabaseClient() {
+async function createSupabaseClient() { // Make function async
+  const cookieStore = await cookies(); // Await cookies
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async getAll() {
-          const cookieStore = await cookies();
+        getAll() {
           return cookieStore.getAll();
         },
-        async setAll(cookiesToSet) {
-          const cookieStore = await cookies();
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => 
-              cookieStore.set(name, value, options)
-            );
-          } catch { /* Ignorar */ }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch { // Changed to empty catch block
+            // The `setAll` method was called from a Server Action.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
         },
       },
     }
-  )
+  );
 }
 
 export async function saveRating(formData: FormData) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { throw new Error("Você precisa estar logado para avaliar.") }
   const score = formData.get('score') as string;
@@ -41,7 +45,7 @@ export async function saveRating(formData: FormData) {
 }
 
 export async function getUserPlaylists() {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data: playlists, error } = await supabase.from('playlists').select('id, name').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -50,7 +54,7 @@ export async function getUserPlaylists() {
 }
 
 export async function addThemeToPlaylist(formData: FormData) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "Usuário não autenticado." };
   const playlistId = formData.get('playlistId') as string;
@@ -65,7 +69,7 @@ export async function addThemeToPlaylist(formData: FormData) {
 }
 
 export async function createPlaylist(formData: FormData): Promise<void> {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { throw new Error("Usuário não autenticado."); }
   const name = formData.get('name') as string;
@@ -79,7 +83,7 @@ export async function createPlaylist(formData: FormData): Promise<void> {
 
 // --- FUNÇÃO QUE ESTAVA FALTANDO ---
 export async function removeThemeFromPlaylist(formData: FormData) {
-  const supabase = createSupabaseClient();
+  const supabase = await createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { return { success: false, message: "Usuário não autenticado." }; }
 

@@ -1,6 +1,7 @@
 // src/components/Header.tsx
 import Link from 'next/link';
-import { createServerClient } from '@supabase/ssr';
+import Image from 'next/image'; // Import Next Image
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import GlobalSearch from './GlobalSearch';
 import { unstable_noStore as noStore } from 'next/cache';
@@ -22,22 +23,34 @@ function LogoutButton() {
 // Componente principal do Header
 export default async function Header() {
   noStore(); // Impede o cache deste componente
+  const cookieStore = await cookies(); // Await cookies
 
-  // Configuração do cliente Supabase com a correção do AWAIT
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async get(name: string) {
-          // A correção está aqui: `await` antes de `cookies()`
-          return (await cookies()).get(name)?.value;
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch { // Changed to empty catch block
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
         },
       },
     }
   );
 
   const { data: { user } } = await supabase.auth.getUser();
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const userName = user?.email?.split('@')[0] || user?.user_metadata?.name || user?.user_metadata?.user_name;
 
   return (
     <header className="bg-gray-800 border-b border-gray-700">
@@ -59,8 +72,17 @@ export default async function Header() {
 
         <div className="text-white flex-shrink-0">
           {user ? (
-            <div className="flex items-center gap-4">
-              <span className="hidden sm:inline">Olá, {user.email?.split('@')[0]}</span>
+            <div className="flex items-center gap-3"> {/* Reduced gap slightly for avatar */}
+              {avatarUrl && (
+                <Image
+                  src={avatarUrl}
+                  alt="User avatar"
+                  width={32} // Adjust size as needed
+                  height={32} // Adjust size as needed
+                  className="rounded-full"
+                />
+              )}
+              {userName && <span className="hidden sm:inline">Olá, {userName}</span>}
               <LogoutButton />
             </div>
           ) : (

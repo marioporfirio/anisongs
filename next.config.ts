@@ -12,6 +12,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'pub-92474f7785774e91a790e086dfa6b2ef.r2.dev',
       },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com', // Added for Google user avatars
+      },
       // Se no futuro aparecerem imagens de outros domínios, é só adicionar aqui
     ],
   },

@@ -1,7 +1,7 @@
 // src/app/anime/[slug]/page.tsx
 import Image from "next/image";
 import ThemeListClient from "./ThemeListClient";
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Ensure CookieOptions is imported
 import { cookies } from 'next/headers';
 
 // Tipagens
@@ -35,27 +35,27 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
 }
 
 // Componente principal da página
-export default async function AnimeDetailPage(props: { params: { slug: string } }) {
-  const { slug } = props.params;
+export default async function AnimeDetailPage({ params }: { params: { slug: string } }) { // Changed signature
+  const { slug } = params; // slug from destructured params
 
-  // CORREÇÃO APLICADA AQUI
+  const cookieStore = await cookies(); // Await cookies
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async getAll() {
-          const cookieStore = await cookies();
-          return cookieStore.getAll();
+        getAll() {
+          return cookieStore.getAll(); // Use cookieStore
         },
-        async setAll(cookiesToSet) {
-          const cookieStore = await cookies();
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) { // Ensure CookieOptions is imported or use import('@supabase/ssr').CookieOptions
           try {
-            cookiesToSet.forEach(({ name, value, options }) => 
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // Ignorar erros em Server Components
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options); // Use cookieStore
+            });
+          } catch { // Changed to empty catch block
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing user sessions.
           }
         },
       },
