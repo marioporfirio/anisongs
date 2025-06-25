@@ -7,7 +7,7 @@ export async function middleware(request: NextRequest) {
     request: {
       headers: request.headers,
     },
-  })
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,39 +20,28 @@ export async function middleware(request: NextRequest) {
         set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({ name, value, ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           })
           response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
+            request: { headers: request.headers },
           })
           response.cookies.set({ name, value: '', ...options })
         },
       },
     }
-  )
+  );
 
-  // Atualiza a sessão do usuário. Essencial para manter o usuário logado.
-  await supabase.auth.getSession()
+  await supabase.auth.getUser();
 
-  return response
+  return response;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Corresponde a todas as rotas de requisição, exceto as seguintes:
-     * - _next/static (arquivos estáticos)
-     * - _next/image (otimização de imagem)
-     * - favicon.ico (ícone do site)
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

@@ -1,24 +1,19 @@
 // src/app/auth/callback/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs' // MUDANÇA IMPORTANTE AQUI
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get('code')
 
   if (code) {
     const cookieStore = cookies()
-    // USANDO O HELPER CORRETO PARA ROUTE HANDLERS
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore }) 
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
-    }
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    await supabase.auth.exchangeCodeForSession(code)
   }
 
-  // URL para redirecionar em caso de erro
-  return NextResponse.redirect(`${origin}/login?error=Could not authenticate user`)
+  // Redireciona para a página inicial
+  return NextResponse.redirect(requestUrl.origin)
 }
