@@ -5,8 +5,12 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // para pegar o usuário no lado do cliente
+import type { Session } from '@supabase/supabase-js'
+
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
+import AddToPlaylistButton from "@/components/AddToPlaylistButton"; // Importa o botão
 
 // Tipagens
 interface Video { basename: string; link: string; }
@@ -17,8 +21,8 @@ interface Anime { name: string; slug: string; images: ImageType[]; animethemes?:
 interface AnimeTheme { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; anime: Anime | null; }
 interface ApiThemeResponse { animethemes: AnimeTheme[]; }
 
-// Componente Card
-function ThemeCard({ theme, onPlay }: { theme: AnimeTheme; onPlay: (url: string, event?: React.MouseEvent) => void; }) {
+// Componente Card MODIFICADO para incluir o botão de playlist
+function ThemeCard({ theme, onPlay, isLoggedIn }: { theme: AnimeTheme; onPlay: (url: string, event?: React.MouseEvent) => void; isLoggedIn: boolean; }) {
   if (!theme.anime) return null; 
   const video = theme.animethemeentries[0]?.videos[0];
   const posterImage = theme.anime.images.find(img => img.facet === 'poster');
@@ -29,38 +33,53 @@ function ThemeCard({ theme, onPlay }: { theme: AnimeTheme; onPlay: (url: string,
         <Image src={posterImage?.link || '/placeholder.png'} alt={`Poster for ${theme.anime.name}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-contain" priority={true}/>
         {video && (<button onClick={(e) => onPlay(video.link, e)} className="absolute inset-0 z-10 bg-black bg-opacity-40 flex items-center justify-center text-white text-5xl opacity-0 group-hover:opacity-100 transition-opacity duration-300">▶</button>)}
       </div>
-      <div className="p-3 flex-grow">
-        <h3 className="text-md font-bold text-white truncate" title={theme.song?.title || 'Untitled'}>{theme.song?.title || 'Untitled'}</h3>
-        <p className="text-sm text-gray-400 truncate" title={theme.anime.name}>{theme.anime.name}</p>
-        <p className="text-xs text-indigo-400 font-semibold mt-1">{theme.slug.toUpperCase()}</p>
+      <div className="p-3 flex-grow flex flex-col justify-between">
+        <div>
+          <h3 className="text-md font-bold text-white truncate" title={theme.song?.title || 'Untitled'}>{theme.song?.title || 'Untitled'}</h3>
+          <p className="text-sm text-gray-400 truncate" title={theme.anime.name}>{theme.anime.name}</p>
+          <p className="text-xs text-indigo-400 font-semibold mt-1">{theme.slug.toUpperCase()}</p>
+        </div>
+        <div className="flex justify-end mt-2">
+          {isLoggedIn && <AddToPlaylistButton themeId={theme.id} />}
+        </div>
       </div>
     </div>
   );
 }
 
-// Componente principal da página com a lógica de filtros
+// Componente principal da página MODIFICADO
 function HomePageContent() {
   const [themes, setThemes] = useState<AnimeTheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
 
+  const supabase = createClientComponentClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // Busca a sessão do usuário no lado do cliente
   useEffect(() => {
+    const getSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+    };
+    getSession();
+  }, [supabase]);
+
+  // Busca os temas da API
+  useEffect(() => {
+    // ... (lógica do useEffect para buscar dados permanece a mesma)
     async function fetchFilteredThemes() {
       setIsLoading(true);
       setError(null);
-
       const year = searchParams.get('year');
       const season = searchParams.get('season');
       const type = searchParams.get('type');
-
       let endpoint = 'https://api.animethemes.moe/animetheme';
       const params = new URLSearchParams();
-      
       if (year || season) {
         endpoint = 'https://api.animethemes.moe/anime';
         params.append('include', 'animethemes.song,animethemes.animethemeentries.videos,images');
@@ -70,35 +89,23 @@ function HomePageContent() {
         params.append('include', 'song,anime.images,animethemeentries.videos');
         if (type) params.append('filter[animetheme][type]', type);
       }
-      
       params.append('page[size]', '50');
-
       if (!year && !season && !type) {
         params.append('sort', '-created_at');
       }
-
       const API_URL = `${endpoint}?${params.toString()}`;
-
       try {
         const response = await fetch(API_URL);
         if (!response.ok) { throw new Error(`A API respondeu com o status: ${response.status}`); }
         const data = await response.json();
-        
         if (year || season) {
-            const allThemes = (data.anime as Anime[]).flatMap(anime => 
-                anime.animethemes?.map(theme => ({
-                    ...theme,
-                    anime: { name: anime.name, slug: anime.slug, images: anime.images }
-                })) || []
-            );
+            const allThemes = (data.anime as Anime[]).flatMap(anime => anime.animethemes?.map(theme => ({...theme, anime: { name: anime.name, slug: anime.slug, images: anime.images }})) || []);
             const finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
             setThemes(finalThemes);
         } else {
             setThemes((data as ApiThemeResponse).animethemes || []);
         }
-
       } catch (err) {
-        console.error("Falha ao buscar os temas:", err);
         if (err instanceof Error) setError(err.message);
         else setError("Ocorreu um erro desconhecido.");
       } finally {
@@ -117,34 +124,26 @@ function HomePageContent() {
     if (!filters.type) current.delete('type'); else current.set('type', filters.type);
     const search = current.toString();
     const query = search ? `?${search}` : "";
-    router.push(`${pathname}${query}`);
+    router.push(`${pathname}${query}`, { scroll: false });
   };
 
   const renderFilteredContent = () => {
+    // ... (lógica de renderização permanece a mesma)
     if (isLoading) {
-      return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {Array.from({ length: 15 }).map((_, i) => (
-            <div key={i} className="bg-gray-800 rounded-lg h-60 animate-pulse"></div>
-          ))}
-        </div>
-      );
+      return ( <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6"> {Array.from({ length: 15 }).map((_, i) => (<div key={i} className="bg-gray-800 rounded-lg h-60 animate-pulse"></div>))} </div> );
     }
     if (error) {
       return <div className="text-center text-red-400 p-10 bg-red-900/20 rounded-lg">{error}</div>;
     }
-    
     const validThemes = themes.filter(theme => !!theme.anime);
-
     if (validThemes.length === 0) {
-      return <div className="text-center text-gray-400 p-10">Nenhum resultado encontrado para os filtros selecionados.</div>
+      return <div className="text-center text-gray-400 p-10">Nenhum resultado encontrado.</div>
     }
-    
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {validThemes.map(theme => (
             <Link key={`${theme.anime!.slug}-${theme.slug}-${theme.id}`} href={`/anime/${theme.anime!.slug}`} className="block hover:scale-105 transition-transform duration-300">
-              <ThemeCard theme={theme} onPlay={handlePlay}/>
+              <ThemeCard theme={theme} onPlay={handlePlay} isLoggedIn={!!session} />
             </Link>
         ))}
       </div>

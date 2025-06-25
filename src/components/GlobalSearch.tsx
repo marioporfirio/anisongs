@@ -15,7 +15,7 @@ interface SearchResult {
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult | null>(null);
+  const [results, setResults] = useState<SearchResult>({}); // Inicia como objeto vazio
   const [isLoading, setIsLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
@@ -25,7 +25,7 @@ export default function GlobalSearch() {
 
   useEffect(() => {
     if (debouncedQuery.length < 3) {
-      setResults(null);
+      setResults({});
       setIsDropdownOpen(false);
       return;
     }
@@ -37,10 +37,8 @@ export default function GlobalSearch() {
       
       const encodedQuery = encodeURIComponent(debouncedQuery);
       
-      // --- TENTATIVA FINAL DE URL: Usando 'include' de forma mais específica ---
-      // Pedimos para a busca incluir as relações 'song' e 'anime' para os temas.
-      // Isso é o que nosso JSX precisa para funcionar sem erros.
-      const API_URL = `https://api.animethemes.moe/search?q=${encodedQuery}&include[animetheme]=song,anime`;
+      // URL ROBUSTA: Usando 'fields' para garantir que a resposta seja sempre um objeto
+      const API_URL = `https://api.animethemes.moe/search?q=${encodedQuery}&fields[search]=anime,artists,animethemes&include[animetheme]=song,anime`;
 
       try {
         const response = await fetch(API_URL);
@@ -50,7 +48,11 @@ export default function GlobalSearch() {
           throw new Error(`A API respondeu com o status: ${response.status}`);
         }
         const data = await response.json();
-        setResults(data.search || {}); 
+        
+        // Verificação final: Garante que `results` seja sempre um objeto.
+        // Se data.search for um array (como no log), o resultado será um objeto vazio.
+        setResults(typeof data.search === 'object' && !Array.isArray(data.search) ? data.search : {});
+
       } catch (error) {
         console.error("Erro ao buscar resultados:", error);
         setResults({});
@@ -67,7 +69,7 @@ export default function GlobalSearch() {
     setQuery('');
   };
 
-  const hasResults = results && ((results.anime?.length ?? 0) > 0 || (results.artists?.length ?? 0) > 0 || (results.animethemes?.length ?? 0) > 0);
+  const hasResults = (results.anime?.length ?? 0) > 0 || (results.artists?.length ?? 0) > 0 || (results.animethemes?.length ?? 0) > 0;
 
   return (
     <div className="relative w-full max-w-xs md:max-w-sm" ref={searchContainerRef}>
@@ -118,7 +120,6 @@ export default function GlobalSearch() {
                 <>
                   <li className="px-4 py-2 text-xs font-bold text-gray-500 uppercase border-t border-gray-700">Músicas</li>
                   {results.animethemes?.map(theme => (
-                    // Adicionamos uma verificação aqui para garantir que theme.anime exista antes de tentar renderizar
                     theme.anime && (
                       <li key={`theme-search-${theme.anime.slug}-${theme.slug}`}>
                         <Link href={`/anime/${theme.anime.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-gray-700 transition-colors">

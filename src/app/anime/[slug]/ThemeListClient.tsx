@@ -4,20 +4,10 @@
 import { useState } from 'react';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
 import RatingStars from '@/components/RatingStars';
-import type { ThemeWithRating } from './page'; // Importa os tipos atualizados
+import AddToPlaylistButton from '@/components/AddToPlaylistButton';
+import type { ThemeWithRating } from './page';
 
-// Componente para a linha de um tema
-function ThemeItem({
-  theme,
-  animeSlug,
-  isLoggedIn,
-  onPlay,
-}: {
-  theme: ThemeWithRating;
-  animeSlug: string;
-  isLoggedIn: boolean;
-  onPlay: (url: string) => void;
-}) {
+function ThemeItem({ theme, animeSlug, isLoggedIn, onPlay }: { theme: ThemeWithRating; animeSlug: string; isLoggedIn: boolean; onPlay: (url: string) => void; }) {
   const video = theme.animethemeentries[0]?.videos[0];
   return (
     <div className="bg-gray-800 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -28,50 +18,33 @@ function ThemeItem({
                 <p className="text-lg text-white">{theme.song?.title || "Título Desconhecido"}</p>
             </div>
             {video && (
-            <button
-              onClick={() => onPlay(video.link)}
-              className="bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-500 transition-colors flex-shrink-0 ml-4 sm:hidden" // Botão menor para mobile
-            >
-              ▶
-            </button>
+            <button onClick={() => onPlay(video.link)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-500 transition-colors flex-shrink-0 ml-4 sm:hidden">▶</button>
           )}
         </div>
         <div className="mt-2">
-          <RatingStars
-            animeSlug={animeSlug}
-            themeSlug={theme.slug}
-            userScore={theme.ratingData.user_score}
-            averageScore={theme.ratingData.average_score}
-            ratingCount={theme.ratingData.rating_count}
-            isLoggedIn={isLoggedIn}
-          />
+          <RatingStars animeSlug={animeSlug} themeSlug={theme.slug} userScore={theme.ratingData.user_score} averageScore={theme.ratingData.average_score} ratingCount={theme.ratingData.rating_count} isLoggedIn={isLoggedIn} />
         </div>
       </div>
-      {video && (
-        <button
-          onClick={() => onPlay(video.link)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-500 transition-colors flex-shrink-0 ml-4 hidden sm:block"
-        >
-          ▶ Assistir
-        </button>
-      )}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {isLoggedIn && <AddToPlaylistButton themeId={theme.id} />}
+        {video && <button onClick={() => onPlay(video.link)} className="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-500 transition-colors hidden sm:block">▶ Assistir</button>}
+      </div>
     </div>
   );
 }
 
-// O componente principal com as PROPS CORRIGIDAS
-export default function ThemeListClient({
-  openings,
-  endings,
-  others,
-  animeSlug, // Prop adicionada
-  isLoggedIn, // Prop adicionada
-}: {
-  openings: ThemeWithRating[];
-  endings: ThemeWithRating[];
-  others: ThemeWithRating[];
-  animeSlug: string; // Tipo adicionado
-  isLoggedIn: boolean; // Tipo adicionado
+export default function ThemeListClient({ 
+  openings, 
+  endings, 
+  others, 
+  animeSlug, 
+  isLoggedIn 
+}: { 
+  openings: ThemeWithRating[], 
+  endings: ThemeWithRating[], 
+  others: ThemeWithRating[],
+  animeSlug: string,
+  isLoggedIn: boolean
 }) {
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
 

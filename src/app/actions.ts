@@ -1,27 +1,26 @@
 // src/app/actions.ts
 'use server'
-
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-// Função para criar um cliente Supabase para Server Actions
 function createSupabaseClient() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async get(name: string) {
-          return (await cookies()).get(name)?.value
+        async getAll() {
+          const cookieStore = await cookies();
+          return cookieStore.getAll();
         },
-        async set(name: string, value: string, options) {
-          // Removido o try-catch, pois a recomendação é ignorar o erro.
-          await (await cookies()).set({ name, value, ...options })
-        },
-        async remove(name: string, options) {
-          // Removido o try-catch, pois a recomendação é ignorar o erro.
-          await (await cookies()).set({ name, value: '', ...options })
+        async setAll(cookiesToSet) {
+          const cookieStore = await cookies();
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => 
+              cookieStore.set(name, value, options)
+            );
+          } catch { /* Ignorar */ }
         },
       },
     }
@@ -29,28 +28,86 @@ function createSupabaseClient() {
 }
 
 export async function saveRating(formData: FormData) {
-  const supabase = createSupabaseClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) { throw new Error("Você precisa estar logado para avaliar.") }
-
-  const score = formData.get('score') as string
-  const animeSlug = formData.get('animeSlug') as string
-  const themeSlug = formData.get('themeSlug') as string
-
+  const score = formData.get('score') as string;
+  const animeSlug = formData.get('animeSlug') as string;
+  const themeSlug = formData.get('themeSlug') as string;
   if (!score || !animeSlug || !themeSlug) { throw new Error("Dados insuficientes para salvar a avaliação.") }
+  const { error } = await supabase.from('ratings').upsert({ user_id: user.id, anime_slug: animeSlug, theme_slug: themeSlug, score: parseFloat(score), });
+  if (error) { console.error("Erro ao salvar avaliação:", error); throw new Error("Não foi possível salvar sua avaliação. Tente novamente."); }
+  revalidatePath(`/anime/${animeSlug}`);
+}
 
-  const { error } = await supabase.from('ratings').upsert({
-    user_id: user.id,
-    anime_slug: animeSlug,
-    theme_slug: themeSlug,
-    score: parseFloat(score),
-  })
+export async function getUserPlaylists() {
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: playlists, error } = await supabase.from('playlists').select('id, name').eq('user_id', user.id).order('created_at', { ascending: false });
+  if (error) { console.error("Erro ao buscar playlists:", error); return []; }
+  return playlists;
+}
 
-  if (error) {
-    console.error("Erro ao salvar avaliação:", error)
-    throw new Error("Não foi possível salvar sua avaliação. Tente novamente.")
+export async function addThemeToPlaylist(formData: FormData) {
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "Usuário não autenticado." };
+  const playlistId = formData.get('playlistId') as string;
+  const themeId = formData.get('themeId') as string;
+  if (!playlistId || !themeId) return { success: false, message: "Dados inválidos." };
+  const { data: existing, error: selectError } = await supabase.from('playlist_themes').select('id').eq('playlist_id', parseInt(playlistId)).eq('theme_id', parseInt(themeId)).maybeSingle();
+  if (selectError) { console.error("Erro ao verificar tema existente:", selectError); return { success: false, message: "Erro no servidor." }; }
+  if (existing) return { success: false, message: "Esta música já está na playlist." };
+  const { error } = await supabase.from('playlist_themes').insert({ playlist_id: parseInt(playlistId), theme_id: parseInt(themeId) });
+  if (error) { console.error("Erro ao adicionar tema:", error); return { success: false, message: "Não foi possível adicionar a música." }; }
+  return { success: true, message: "Música adicionada com sucesso!" };
+}
+
+export async function createPlaylist(formData: FormData): Promise<void> {
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { throw new Error("Usuário não autenticado."); }
+  const name = formData.get('name') as string;
+  const description = formData.get('description') as string;
+  const isPublic = formData.get('isPublic') === 'on';
+  if (!name) { throw new Error("O nome da playlist é obrigatório."); }
+  const { error } = await supabase.from('playlists').insert({ user_id: user.id, name: name, description: description, is_public: isPublic });
+  if (error) { console.error("Erro ao criar playlist:", error); throw new Error("Não foi possível criar a playlist."); }
+  revalidatePath('/playlists');
+}
+
+// --- FUNÇÃO QUE ESTAVA FALTANDO ---
+export async function removeThemeFromPlaylist(formData: FormData) {
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { return { success: false, message: "Usuário não autenticado." }; }
+
+  const playlistId = formData.get('playlistId') as string;
+  const playlistThemeId = formData.get('playlistThemeId') as string;
+
+  if (!playlistId || !playlistThemeId) { return { success: false, message: "Dados inválidos." }; }
+
+  const { data: playlist } = await supabase
+    .from('playlists')
+    .select('user_id')
+    .eq('id', parseInt(playlistId))
+    .single();
+
+  if (!playlist || playlist.user_id !== user.id) {
+    return { success: false, message: "Não autorizado." };
   }
 
-  revalidatePath(`/anime/${animeSlug}`)
+  const { error } = await supabase
+    .from('playlist_themes')
+    .delete()
+    .eq('id', parseInt(playlistThemeId));
+  
+  if (error) {
+    console.error("Erro ao remover tema:", error);
+    return { success: false, message: "Não foi possível remover a música." };
+  }
+
+  revalidatePath(`/playlists/${playlistId}`);
+  return { success: true, message: "Música removida com sucesso!" };
 }
