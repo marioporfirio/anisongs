@@ -1,7 +1,16 @@
-import type { NextConfig } from "next";
+// next.config.ts
 
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 's4.anilist.co', // Domínio principal para as imagens da API
+      },
+      // Se no futuro aparecerem imagens de outros domínios, é só adicionar aqui
+    ],
+  },
 };
 
 export default nextConfig;
