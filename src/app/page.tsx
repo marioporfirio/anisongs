@@ -16,8 +16,11 @@ import AddToPlaylistButton from "@/components/AddToPlaylistButton"; // Importa o
 interface Video { basename: string; link: string; }
 interface AnimeThemeEntry { videos: Video[]; }
 interface ImageType { facet: 'poster' | 'cover' | 'Large Cover' | 'Small Cover'; link: string; }
-interface Song { title: string; }
+// Updated Song and added Artist interface
+interface Artist { id: number; name: string; slug?: string; } // Assuming id and name are primary, slug is optional
+interface Song { title: string; artists?: Artist[]; }
 interface Anime { name: string; slug: string; images: ImageType[]; animethemes?: AnimeTheme[]; }
+// AnimeTheme now uses the updated Song type
 interface AnimeTheme { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; anime: Anime | null; }
 interface ApiThemeResponse { animethemes: AnimeTheme[]; }
 
@@ -45,7 +48,13 @@ function ThemeCardComponent({ theme, onPlay, isLoggedIn }: ThemeCardProps) {
       <div className="p-3 flex-grow flex flex-col justify-between">
         <div>
           <h3 className="text-md font-bold text-white truncate" title={theme.song?.title || 'Untitled'}>{theme.song?.title || 'Untitled'}</h3>
-          <p className="text-sm text-gray-400 truncate" title={theme.anime.name}>{theme.anime.name}</p>
+          {/* Display Artist Name(s) */}
+          {theme.song?.artists && theme.song.artists.length > 0 && (
+            <p className="text-xs text-gray-500 truncate" title={theme.song.artists.map(artist => artist.name).join(', ')}>
+              {theme.song.artists.map(artist => artist.name).join(', ')}
+            </p>
+          )}
+          <p className="text-sm text-gray-400 truncate mt-1" title={theme.anime.name}>{theme.anime.name}</p>
           <p className="text-xs text-indigo-400 font-semibold mt-1">{theme.slug.toUpperCase()}</p>
         </div>
         <div className="flex justify-end mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
@@ -94,11 +103,13 @@ function HomePageContent() {
       const params = new URLSearchParams();
       if (year || season) {
         endpoint = 'https://api.animethemes.moe/anime';
-        params.append('include', 'animethemes.song,animethemes.animethemeentries.videos,images');
+        // Added animethemes.song.artists to include
+        params.append('include', 'animethemes.song.artists,animethemes.song,animethemes.animethemeentries.videos,images');
         if (year) params.append('filter[year]', year);
         if (season) params.append('filter[season]', season);
       } else {
-        params.append('include', 'song,anime.images,animethemeentries.videos');
+        // Added song.artists to include
+        params.append('include', 'song.artists,song,anime.images,animethemeentries.videos');
         if (type) params.append('filter[animetheme][type]', type);
       }
       params.append('page[size]', '50');
