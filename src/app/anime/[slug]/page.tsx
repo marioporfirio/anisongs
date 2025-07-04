@@ -1,4 +1,5 @@
 // src/app/anime/[slug]/page.tsx
+
 import Image from "next/image";
 import ThemeListClient from "./ThemeListClient";
 import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Ensure CookieOptions is imported
@@ -34,8 +35,18 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     return data.anime;
 }
 
+// ======================= INÍCIO DA CORREÇÃO =======================
+// Defina uma interface para as props da página para melhor clareza e conformidade
+interface AnimeDetailPageProps {
+  params: {
+    slug: string;
+  };
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
 // Componente principal da página
-export default async function AnimeDetailPage({ params }: { params: { slug: string } }) { // Changed signature
+export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) { // Use a nova interface aqui
+// ======================== FIM DA CORREÇÃO =========================
   const { slug } = params; // slug from destructured params
 
   const cookieStore = await cookies(); // Await cookies
