@@ -5,7 +5,8 @@ import { useEffect, useState, Suspense, useCallback, memo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"; // para pegar o usuário no lado do cliente
+// MODIFICAÇÃO: Importa createBrowserClient do @supabase/ssr
+import { createBrowserClient } from "@supabase/ssr";
 import type { Session } from '@supabase/supabase-js'
 
 import VideoPlayerModal from "@/components/VideoPlayerModal";
@@ -77,7 +78,11 @@ function HomePageContent() {
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
 
-  const supabase = createClientComponentClient();
+  // MODIFICAÇÃO: Instancia o cliente com createBrowserClient
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

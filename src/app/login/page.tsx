@@ -1,13 +1,18 @@
 // src/app/login/page.tsx
-"use client"; // Make this a client component
+"use client";
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+// MODIFICAÇÃO: Importa createBrowserClient do @supabase/ssr
+import { createBrowserClient } from '@supabase/ssr';
 import AuthForm from '@/components/Auth';
 
 export default function LoginPage() {
-  const supabase = createClientComponentClient();
+  // MODIFICAÇÃO: Instancia o cliente com createBrowserClient
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const router = useRouter();
 
   useEffect(() => {
@@ -19,11 +24,6 @@ export default function LoginPage() {
     };
     checkSession();
   }, [supabase, router]);
-
-  // Optionally, show a loading state or null while checking session
-  // For simplicity, just rendering the form directly
-  // A more robust solution might wait for session check before rendering AuthForm
-  // or AuthForm itself could handle this if it shows user info when session exists.
 
   return (
     <div className="container mx-auto p-4">

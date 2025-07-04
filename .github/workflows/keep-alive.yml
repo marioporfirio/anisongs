@@ -1,0 +1,21 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Executa todos os dias às 5h da manhã (UTC)
+    # Você pode ajustar o horário. O importante é que execute pelo menos uma vez por semana.
+    - cron: "0 5 * * *"
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase API to prevent pausing
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -X POST "${SUPABASE_URL}/rest/v1/rpc/keep_alive" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json"

@@ -1,7 +1,8 @@
 // src/components/RatingSystem.tsx
 "use client";
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+// MODIFICAÇÃO: Importa createBrowserClient do @supabase/ssr
+import { createBrowserClient } from "@supabase/ssr";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
@@ -12,10 +13,13 @@ interface RatingSystemProps {
 }
 
 export default function RatingSystem({ session, animeSlug, themeSlug }: RatingSystemProps) {
-  const supabase = createClientComponentClient();
+  // MODIFICAÇÃO: Instancia o cliente com createBrowserClient
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const [userScore, setUserScore] = useState<number | null>(null);
 
-  // Função para salvar/atualizar a nota
   const handleRating = async (score: number) => {
     if (!session) {
       alert("Você precisa estar logado para avaliar!");
@@ -36,7 +40,6 @@ export default function RatingSystem({ session, animeSlug, themeSlug }: RatingSy
     }
   };
   
-  // (Opcional) Buscar a nota que o usuário já deu para esta música
   useEffect(() => {
     // ... lógica para buscar a nota inicial ...
   }, [session]);
@@ -49,7 +52,6 @@ export default function RatingSystem({ session, animeSlug, themeSlug }: RatingSy
   return (
     <div>
       <h4 className="text-sm font-semibold text-white mt-2">Sua Avaliação:</h4>
-      {/* Aqui você pode criar um componente mais bonito de estrelas ou slider */}
       <input 
         type="number" 
         min="0" max="10" step="0.5" 

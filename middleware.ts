@@ -3,51 +3,63 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Let's start with a pass-through response.
+  // We'll update this response if the Supabase client needs to set a cookie.
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
-  });
+  })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
+        get(name: string) {
+          return request.cookies.get(name)?.value
         },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set({ name, value, ...options }));
-          response = NextResponse.next({ // Re-clone response BEFORE setting cookies on it for this request-response cycle
-            request: { headers: request.headers },
-          });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set({ name, value, ...options }));
+        set(name: string, value: string, options: CookieOptions) {
+          // A cookie has been set, so we need to create a new response
+          // and copy over the request headers and the new cookie.
+          request.cookies.set({ name, value, ...options }) // This line is for local context
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({ name, value, ...options })
+        },
+        remove(name: string, options: CookieOptions) {
+          // A cookie has been removed, so we need to create a new response
+          // and copy over the request headers with the deleted cookie.
+          request.cookies.set({ name, value: '', ...options }) // This line is for local context
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
-  );
+  )
 
-  // IMPORTANT: Avoid calling `await supabase.auth.getUser()` in middleware.
-  // This method is designed for Server Components and Route Handlers, not middleware.
-  // Refreshing the session is done automatically when `getSession()` is called on the client
-  // or when `getUser()` is called in a Server Component or Route Handler.
-  // If you need to protect routes, use `await supabase.auth.getSession()` instead
-  // and check for the presence of a session.
-  // For this specific case, if the goal is just to refresh the session cookie if needed,
-  // the current setup might be okay, but it's often a source of issues.
-  // The @supabase/ssr library is designed to handle cookie refresh automatically
-  // when auth methods are called in Server Components / Route Handlers.
-  // For now, I will keep it to see if the other changes are sufficient.
-  // If issues persist, especially with session refresh, this `getUser()` call might need reconsideration.
-  await supabase.auth.getUser();
+  // Refresh session if expired - `getSession` is fine, but `getUser` is also common
+  // and ensures the user object is available if needed.
+  await supabase.auth.getUser()
 
-
-  return response;
+  return response
 }
 
 export const config = {
   matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }
