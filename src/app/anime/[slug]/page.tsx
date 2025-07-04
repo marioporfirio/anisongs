@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import ThemeListClient from "./ThemeListClient";
-import { createServerClient, type CookieOptions } from '@supabase/ssr'; // Ensure CookieOptions is imported
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 // Tipagens
@@ -36,20 +36,18 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
 }
 
 // ======================= INÍCIO DA CORREÇÃO =======================
-// Defina uma interface para as props da página para melhor clareza e conformidade
+// Define a interface para as props da página de forma explícita e simples.
 interface AnimeDetailPageProps {
-  params: {
-    slug: string;
-  };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params: { slug: string };
+  searchParams: { [key: string]: string | string[] | undefined };
 }
 
 // Componente principal da página
-export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) { // Use a nova interface aqui
+export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) {
 // ======================== FIM DA CORREÇÃO =========================
-  const { slug } = params; // slug from destructured params
+  const { slug } = params;
 
-  const cookieStore = await cookies(); // Await cookies
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,14 +55,14 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll(); // Use cookieStore
+          return cookieStore.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) { // Ensure CookieOptions is imported or use import('@supabase/ssr').CookieOptions
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options); // Use cookieStore
+              cookieStore.set(name, value, options);
             });
-          } catch { // Changed to empty catch block
+          } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing user sessions.
           }
