@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { useDebounce } from '@/hooks/useDebounce';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
 
@@ -18,6 +19,7 @@ export default function GlobalSearch() {
   const [results, setResults] = useState<SearchResult>({}); // Inicia como objeto vazio
   const [isLoading, setIsLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const router = useRouter(); // Initialize useRouter
   
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const debouncedQuery = useDebounce(query, 500);
@@ -69,6 +71,14 @@ export default function GlobalSearch() {
     setQuery('');
   };
 
+  const handleArtistResultClick = (artistSlug: string, event: React.MouseEvent) => {
+    event.preventDefault(); // Prevent default Link navigation
+    router.push(`/artist/${artistSlug}`); // Navigate to artist page
+    
+    setIsDropdownOpen(false); // Close dropdown
+    setQuery(''); // Clear query
+  };
+
   const hasResults = (results.anime?.length ?? 0) > 0 || (results.artists?.length ?? 0) > 0 || (results.animethemes?.length ?? 0) > 0;
 
   return (
@@ -109,9 +119,14 @@ export default function GlobalSearch() {
                   <li className="px-4 py-2 text-xs font-bold text-gray-500 uppercase border-t border-gray-700">Artistas</li>
                   {results.artists?.map(artist => (
                     <li key={`artist-search-${artist.slug}`}>
-                      <Link href={`/artist/${artist.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-gray-700">
+                      {/* Use the new handler for artist clicks */}
+                      <a 
+                        href={`/artist/${artist.slug}`} // Fallback href, actual navigation is prevented
+                        onClick={(e) => handleArtistResultClick(artist.slug, e)} 
+                        className="block px-4 py-2 hover:bg-gray-700 cursor-pointer"
+                      >
                         {artist.name}
-                      </Link>
+                      </a>
                     </li>
                   ))}
                 </>

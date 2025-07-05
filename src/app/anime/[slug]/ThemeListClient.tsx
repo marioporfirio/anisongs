@@ -6,6 +6,7 @@ import VideoPlayerModal from '@/components/VideoPlayerModal';
 import RatingStars from '@/components/RatingStars';
 import AddToPlaylistButton from '@/components/AddToPlaylistButton';
 import type { ThemeWithRating } from './page';
+import Link from 'next/link'; // Import Link
 
 function ThemeItem({ theme, animeSlug, isLoggedIn, onPlay }: { theme: ThemeWithRating; animeSlug: string; isLoggedIn: boolean; onPlay: (url: string) => void; }) {
   const video = theme.animethemeentries[0]?.videos[0];
@@ -17,7 +18,23 @@ function ThemeItem({ theme, animeSlug, isLoggedIn, onPlay }: { theme: ThemeWithR
                 <span className="font-bold text-indigo-400 text-sm">{theme.slug.toUpperCase()}</span>
                 <p className="text-lg text-white">{theme.song?.title || "Título Desconhecido"}</p>
                 {theme.song?.artists && theme.song.artists.length > 0 && (
-                  <p className="text-sm text-gray-400">{theme.song.artists.map(artist => artist.name).join(', ')}</p>
+                  <p className="text-sm text-gray-400">
+                    {theme.song.artists.map((artist, index) => (
+                      artist.slug ? (
+                        <span key={artist.id}>
+                          <Link href={`/artist/${artist.slug}`} className="hover:text-indigo-300 hover:underline">
+                            {artist.name}
+                          </Link>
+                          {index < theme.song!.artists!.length - 1 ? ', ' : ''}
+                        </span>
+                      ) : (
+                        <span key={artist.id}>
+                          {artist.name}
+                          {index < theme.song!.artists!.length - 1 ? ', ' : ''}
+                        </span>
+                      )
+                    ))}
+                  </p>
                 )}
             </div>
             {video && (
@@ -25,7 +42,7 @@ function ThemeItem({ theme, animeSlug, isLoggedIn, onPlay }: { theme: ThemeWithR
           )}
         </div>
         <div className="mt-2">
-          <RatingStars animeSlug={animeSlug} themeSlug={theme.slug} userScore={theme.ratingData.user_score} averageScore={theme.ratingData.average_score} ratingCount={theme.ratingData.rating_count} isLoggedIn={isLoggedIn} />
+          <RatingStars animeSlug={animeSlug} themeSlug={theme.slug} isLoggedIn={isLoggedIn} />
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">

@@ -230,3 +230,45 @@ export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDe
     user_id: playlistData.user_id,
   };
 }
+
+export async function getThemeRatingDetails(animeSlug: string, themeSlug: string): Promise<{
+  averageScore: number | null;
+  ratingCount: number;
+  userScore: number | null;
+}> {
+  const supabase = await createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Fetch all ratings for this theme
+  const { data: ratings, error: ratingsError } = await supabase
+    .from('ratings')
+    .select('score, user_id')
+    .eq('anime_slug', animeSlug)
+    .eq('theme_slug', themeSlug);
+
+  if (ratingsError) {
+    console.error("Error fetching ratings for theme stats:", ratingsError);
+    // Return default/empty stats on error, or throw
+    return { averageScore: null, ratingCount: 0, userScore: null };
+  }
+
+  let sumOfScores = 0;
+  let currentUserScore: number | null = null;
+
+  if (ratings && ratings.length > 0) {
+    ratings.forEach(rating => {
+      sumOfScores += rating.score;
+      if (user && rating.user_id === user.id) {
+        currentUserScore = rating.score;
+      }
+    });
+    const average = sumOfScores / ratings.length;
+    return {
+      averageScore: parseFloat(average.toFixed(1)), // Round to one decimal place
+      ratingCount: ratings.length,
+      userScore: currentUserScore,
+    };
+  }
+
+  return { averageScore: null, ratingCount: 0, userScore: null };
+}

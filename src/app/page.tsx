@@ -12,6 +12,7 @@ import type { Session } from '@supabase/supabase-js'
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
 import AddToPlaylistButton from "@/components/AddToPlaylistButton"; // Importa o botão
+// import ArtistDetailModal from "@/components/ArtistDetailModal"; // This line was causing an error as the file is deleted
 
 // Tipagens
 interface Video { basename: string; link: string; }
@@ -29,12 +30,13 @@ interface ApiThemeResponse { animethemes: AnimeTheme[]; }
 interface ThemeCardProps {
   theme: AnimeTheme;
   onPlay: (url: string, event?: React.MouseEvent) => void;
+  // onArtistClick prop is no longer needed as navigation will be direct
   isLoggedIn: boolean;
 }
 
 // Componente ThemeCard original (não memoizado diretamente aqui)
 function ThemeCardComponent({ theme, onPlay, isLoggedIn }: ThemeCardProps) {
-  console.log(`ThemeCardComponent for ${theme.song?.title}: isLoggedIn = ${isLoggedIn}`); // Log isLoggedIn
+  // console.log(`ThemeCardComponent for ${theme.song?.title}: isLoggedIn = ${isLoggedIn}`); // Log isLoggedIn
   if (!theme.anime) return null;
   const video = theme.animethemeentries[0]?.videos[0];
   const posterImage = theme.anime.images.find(img => img.facet === 'poster') ||
@@ -50,11 +52,28 @@ function ThemeCardComponent({ theme, onPlay, isLoggedIn }: ThemeCardProps) {
       <div className="p-3 flex-grow flex flex-col justify-between">
         <div>
           <h3 className="text-md font-bold text-white truncate" title={theme.song?.title || 'Untitled'}>{theme.song?.title || 'Untitled'}</h3>
-          {/* Display Artist Name(s) */}
+          {/* Display Artist Name(s) - Now Clickable */}
           {theme.song?.artists && theme.song.artists.length > 0 && (
-            <p className="text-xs text-gray-500 truncate" title={theme.song.artists.map(artist => artist.name).join(', ')}>
-              {theme.song.artists.map(artist => artist.name).join(', ')}
-            </p>
+            <div className="text-xs text-gray-500 truncate" title={theme.song.artists.map(artist => artist.name).join(', ')}>
+              {theme.song.artists.map((artist, index) => (
+                artist.slug ? (
+                  <span key={artist.id || index} onClick={(e) => e.stopPropagation()}> {/* Stop propagation for Link inside Link */}
+                    <Link
+                      href={`/artist/${artist.slug}`}
+                      className="hover:text-indigo-400 hover:underline"
+                    >
+                      {artist.name}
+                    </Link>
+                    {index < theme.song!.artists!.length - 1 ? ', ' : ''}
+                  </span>
+                ) : (
+                  <span key={artist.id || index}>
+                    {artist.name}
+                    {index < theme.song!.artists!.length - 1 ? ', ' : ''}
+                  </span>
+                )
+              ))}
+            </div>
           )}
           <p className="text-sm text-gray-400 truncate mt-1" title={theme.anime.name}>{theme.anime.name}</p>
           <p className="text-xs text-indigo-400 font-semibold mt-1">{theme.slug.toUpperCase()}</p>
@@ -75,8 +94,10 @@ function HomePageContent() {
   const [themes, setThemes] = useState<AnimeTheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  // selectedArtistSlug is no longer needed here
+  const [videoForModal, setVideoForModal] = useState<string | null>(null);
+
 
   // MODIFICAÇÃO: Instancia o cliente com createBrowserClient
   const supabase = createBrowserClient(
@@ -147,9 +168,16 @@ function HomePageContent() {
 
   const handlePlay = useCallback((url: string, event?: React.MouseEvent) => {
     event?.preventDefault();
-    setSelectedVideoUrl(url);
-  }, []); // setSelectedVideoUrl é estável
+    setVideoForModal(url);
+  }, []); 
   
+  // handleArtistClick is no longer needed as ThemeCardComponent now uses <Link>
+  // const handleArtistClick = useCallback((artistSlug: string, event?: React.MouseEvent) => {
+  //   event?.preventDefault();
+  //   event?.stopPropagation(); // Prevent card's link navigation
+  //   setSelectedArtistSlug(artistSlug); // This state is removed
+  // }, []);
+
   const handleFilterChange = useCallback((filters: { year: string; season: string; type: string }) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
     if (!filters.year) current.delete('year'); else current.set('year', filters.year);
@@ -161,8 +189,8 @@ function HomePageContent() {
   }, [searchParams, router, pathname]);
 
   const closeModal = useCallback(() => {
-    setSelectedVideoUrl(null);
-  }, []); // setSelectedVideoUrl é estável
+    setVideoForModal(null);
+  }, []);
 
   const renderFilteredContent = () => {
     // ... (lógica de renderização permanece a mesma)
@@ -180,6 +208,7 @@ function HomePageContent() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         {validThemes.map(theme => (
             <Link key={`${theme.anime!.slug}-${theme.slug}-${theme.id}`} href={`/anime/${theme.anime!.slug}`} className="block hover:scale-105 transition-transform duration-300">
+              {/* onArtistClick is removed from ThemeCard props */}
               <ThemeCard theme={theme} onPlay={handlePlay} isLoggedIn={!!session} />
             </Link>
         ))}
@@ -193,7 +222,8 @@ function HomePageContent() {
       <div className="container mx-auto p-4 md:p-6">
         {renderFilteredContent()}
       </div>
-      <VideoPlayerModal videoUrl={selectedVideoUrl} onClose={closeModal} />
+      <VideoPlayerModal videoUrl={videoForModal} onClose={closeModal} />
+      {/* ArtistDetailModal instance is removed */}
     </>
   );
 }
