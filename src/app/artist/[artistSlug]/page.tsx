@@ -244,9 +244,7 @@ export default function ArtistPage() {
                           ▶ Assistir
                         </button>
                       )}
-                      <Link href={`/anime/${theme.animeSlug}`} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium transition-colors">
-                         Anime Details
-                      </Link>
+                      {/* Anime Details button removed as anime name is a link */}
                       {isUserLoggedIn && ( // Use isUserLoggedIn for AddToPlaylistButton
                         <AddToPlaylistButton themeId={theme.themeId} />
                       )}
