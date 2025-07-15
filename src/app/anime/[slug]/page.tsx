@@ -35,7 +35,6 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     return data.anime;
 }
 
-// ======================= INÍCIO DA CORREÇÃO =======================
 // Define a interface para as props da página de forma explícita e simples.
 interface AnimeDetailPageProps {
   params: { slug: string };
@@ -44,7 +43,6 @@ interface AnimeDetailPageProps {
 
 // Componente principal da página
 export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) {
-// ======================== FIM DA CORREÇÃO =========================
   const { slug } = params;
 
   const cookieStore = await cookies();
