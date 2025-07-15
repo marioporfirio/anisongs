@@ -5,17 +5,36 @@ on:
     # Executa todos os dias às 5h da manhã (UTC)
     # Você pode ajustar o horário. O importante é que execute pelo menos uma vez por semana.
     - cron: "0 5 * * *"
+  workflow_dispatch:
+    # Adiciona um botão "Run workflow" na aba Actions para você poder executar manualmente.
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Supabase API to prevent pausing
+      - name: Call Supabase function to prevent pausing
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl -X POST "${SUPABASE_URL}/rest/v1/rpc/keep_alive" \
+          # Executa o comando curl e armazena a resposta e o código de status HTTP
+          response=$(curl -s -w "\n%{http_code}" -X POST "${SUPABASE_URL}/rest/v1/rpc/keep_alive" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "Content-Type: application/json"
+            -H "Content-Type: application/json")
+          
+          # Extrai o código de status da última linha da resposta
+          http_code=$(echo "$response" | tail -n1)
+          # Extrai o corpo da resposta (tudo menos a última linha)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Corpo da Resposta: $body"
+          echo "Código de Status HTTP: $http_code"
+
+          # Verifica se o código de status não é 200 (OK)
+          if [ "$http_code" -ne 200 ]; then
+            echo "Erro: A chamada para a API falhou com o código de status $http_code"
+            exit 1
+          fi
+
+          echo "Função keep_alive chamada com sucesso."
