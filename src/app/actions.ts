@@ -40,28 +40,44 @@ export async function saveRating(formData: FormData) {
   const animeSlug = formData.get('animeSlug') as string;
   const themeSlug = formData.get('themeSlug') as string;
 
-  if (!scoreStr || !animeSlug || !themeSlug) { 
-    throw new Error("Dados insuficientes para salvar a avaliação (score, animeSlug, ou themeSlug ausente).") 
+  if (!animeSlug || !themeSlug) { 
+    throw new Error("Dados insuficientes para salvar a avaliação (animeSlug, ou themeSlug ausente).") 
   }
 
-  const scoreNum = parseFloat(scoreStr);
-  if (isNaN(scoreNum)) {
-    // This case should ideally not be reached if RatingStars sends valid numbers
-    console.error(`Tentativa de salvar avaliação com score inválido: ${scoreStr}`);
-    throw new Error("Valor de score inválido.");
+  let scoreNum: number | null = null;
+  if (scoreStr) {
+    scoreNum = parseFloat(scoreStr);
+    if (isNaN(scoreNum)) {
+      console.error(`Tentativa de salvar avaliação com score inválido: ${scoreStr}`);
+      throw new Error("Valor de score inválido.");
+    }
   }
 
-  const { error } = await supabase.from('ratings').upsert({ 
-    user_id: user.id, 
-    anime_slug: animeSlug, 
-    theme_slug: themeSlug, 
-    score: scoreNum, 
-  });
+  if (scoreNum === null) {
+    // Delete the rating if score is null
+    const { error } = await supabase.from('ratings')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('anime_slug', animeSlug)
+      .eq('theme_slug', themeSlug);
 
-  if (error) { 
-    console.error("Erro ao salvar avaliação no Supabase:", error); // Log detalhado do erro do Supabase
-    // Informar ao usuário para checar logs do servidor pode ser útil se o erro for complexo (ex: RLS, schema)
-    throw new Error("Não foi possível salvar sua avaliação. Verifique os logs do servidor para detalhes do erro do Supabase."); 
+    if (error) {
+      console.error("Erro ao deletar avaliação no Supabase:", error);
+      throw new Error("Não foi possível deletar sua avaliação.");
+    }
+  } else {
+    // Upsert the rating
+    const { error } = await supabase.from('ratings').upsert({ 
+      user_id: user.id, 
+      anime_slug: animeSlug, 
+      theme_slug: themeSlug, 
+      score: scoreNum, 
+    });
+
+    if (error) { 
+      console.error("Erro ao salvar avaliação no Supabase:", error); 
+      throw new Error("Não foi possível salvar sua avaliação. Verifique os logs do servidor para detalhes do erro do Supabase."); 
+    }
   }
   revalidatePath(`/anime/${animeSlug}`);
 }
@@ -101,6 +117,40 @@ export async function createPlaylist(formData: FormData): Promise<void> {
   const { error } = await supabase.from('playlists').insert({ user_id: user.id, name: name, description: description, is_public: isPublic });
   if (error) { console.error("Erro ao criar playlist:", error); throw new Error("Não foi possível criar a playlist."); }
   revalidatePath('/playlists');
+}
+
+export async function deletePlaylist(formData: FormData) {
+  const supabase = await createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { return { success: false, message: "Usuário não autenticado." }; }
+
+  const playlistId = formData.get('playlistId') as string;
+
+  if (!playlistId) { return { success: false, message: "ID da playlist inválido." }; }
+
+  // Verify ownership before deleting
+  const { data: playlist, error: fetchError } = await supabase
+    .from('playlists')
+    .select('user_id')
+    .eq('id', parseInt(playlistId))
+    .single();
+
+  if (fetchError || !playlist || playlist.user_id !== user.id) {
+    return { success: false, message: "Não autorizado ou playlist não encontrada." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from('playlists')
+    .delete()
+    .eq('id', parseInt(playlistId));
+  
+  if (deleteError) {
+    console.error("Erro ao deletar playlist:", deleteError);
+    return { success: false, message: "Não foi possível deletar a playlist." };
+  }
+
+  revalidatePath('/playlists');
+  return { success: true, message: "Playlist deletada com sucesso!" };
 }
 
 // --- FUNÇÃO QUE ESTAVA FALTANDO ---

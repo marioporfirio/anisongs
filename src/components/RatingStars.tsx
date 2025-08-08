@@ -68,12 +68,24 @@ export default function RatingStars({
 
     const formData = new FormData(form);
     const score = formData.get('score');
-    if (!score || !isLoggedIn) return; // No score or not logged in, do nothing
+    let scoreToSave: number | null = score ? parseFloat(score as string) : null;
+
+    // If the user clicks on their current score, remove the rating
+    if (scoreToSave === currentUserScore) {
+      scoreToSave = null;
+    }
+
+    if (!isLoggedIn) return; // Not logged in, do nothing
 
     startSubmitTransition(async () => {
       try {
-        await saveRating(formData);
-        // After successful save, refresh the rating details
+        const newFormData = new FormData();
+        newFormData.append('animeSlug', animeSlug);
+        newFormData.append('themeSlug', themeSlug);
+        if (scoreToSave !== null) {
+          newFormData.append('score', scoreToSave.toString());
+        }
+        await saveRating(newFormData);
         await fetchDetails(); 
       } catch (error) {
         console.error("Failed to save rating:", error);
@@ -87,6 +99,80 @@ export default function RatingStars({
     return <div className="text-sm text-gray-400 h-10 flex items-center">Loading ratings...</div>;
   }
 
+  const displayScore = hoverRating || currentUserScore || 0;
+
+  const glowClassName = `absolute -inset-2 pointer-events-none transition-all duration-200 ease-out 
+    ${displayScore <= 2 ? 'shadow-red-500/50'
+    : displayScore <= 4 ? 'shadow-orange-400/50'
+    : displayScore <= 6 ? 'shadow-yellow-400/50'
+    : displayScore <= 8 ? 'shadow-teal-400/50'
+    : 'shadow-indigo-400/50'
+  }`;
+
+  const glowBoxShadow = `0 0 15px 5px ${
+    displayScore <= 2 ? 'rgba(239, 68, 68, 0.5)'
+    : displayScore <= 4 ? 'rgba(251, 146, 60, 0.5)'
+    : displayScore <= 6 ? 'rgba(250, 204, 21, 0.5)'
+    : displayScore <= 8 ? 'rgba(20, 184, 166, 0.5)'
+    : 'rgba(99, 102, 241, 0.5)'
+  }`;
+
+  const renderRatingControls = () => {
+    if (!isLoggedIn) return null;
+
+    return (
+      <div 
+        className="flex items-center relative"
+        onMouseLeave={() => setHoverRating(0)}
+      >
+        {[...Array(10)].map((_, i) => {
+          const ratingValue = i + 1;
+          const baseColorClass = 
+            displayScore <= 2 ? 'text-red-500'
+            : displayScore <= 4 ? 'text-orange-400'
+            : displayScore <= 6 ? 'text-yellow-400'
+            : displayScore <= 8 ? 'text-teal-400'
+            : 'text-indigo-400';
+
+          const starIconClassName = `w-6 h-6 transition-colors duration-200 ${
+            ratingValue <= displayScore ? baseColorClass : 'text-gray-600'
+          } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`;
+
+          return (
+            <label key={ratingValue} className="cursor-pointer">
+              <input
+                type="radio"
+                name="score"
+                value={ratingValue}
+                className="sr-only"
+                checked={currentUserScore !== null && (currentUserScore as number) === ratingValue} // Reflect current user's score
+                onChange={(e) => { e.stopPropagation(); handleRatingSubmit(e); }} // Stop propagation
+                disabled={isSubmitting}
+              />
+              <StarIcon
+                className={starIconClassName}
+                                  onMouseEnter={() => { 
+                    if (!isSubmitting) {
+                      setHoverRating(ratingValue);
+                    }
+                  }}
+              />
+            </label>
+          );
+        })}
+        {/* Glow effect */}
+        {(hoverRating > 0 || (currentUserScore as number) > 0) ? (
+          <div 
+            className={glowClassName}
+            style={{
+              boxShadow: glowBoxShadow
+            }}
+          ></div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <form className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
       <input type="hidden" name="animeSlug" value={animeSlug} />
@@ -98,41 +184,7 @@ export default function RatingStars({
         <span className="text-gray-400">({currentRatingCount} votos)</span>
       </div>
 
-      {isLoggedIn && (
-        <div 
-          className="flex items-center"
-          onMouseLeave={() => setHoverRating(0)}
-        >
-          {[...Array(10)].map((_, i) => {
-            const ratingValue = i + 1;
-            return (
-              <label key={ratingValue} className="cursor-pointer">
-                <input
-                  type="radio"
-                  name="score"
-                  value={ratingValue}
-                  className="sr-only"
-                  checked={currentUserScore === ratingValue} // Reflect current user's score
-                  onChange={handleRatingSubmit} // Use onChange for immediate action on selection
-                  disabled={isSubmitting}
-                />
-                <StarIcon
-                  className={`w-6 h-6 transition-colors ${
-                    ratingValue <= (hoverRating || currentUserScore || 0)
-                      ? ratingValue <= 2 ? 'text-red-500'
-                      : ratingValue <= 4 ? 'text-orange-400'
-                      : ratingValue <= 6 ? 'text-yellow-400'
-                      : ratingValue <= 8 ? 'text-teal-400'
-                      : 'text-indigo-400'
-                      : 'text-gray-600'
-                  } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onMouseEnter={() => !isSubmitting && setHoverRating(ratingValue)}
-                />
-              </label>
-            );
-          })}
-        </div>
-      )}
+      {renderRatingControls()}
       {isSubmitting && <div className="text-sm text-gray-400">Saving...</div>}
     </form>
   );
