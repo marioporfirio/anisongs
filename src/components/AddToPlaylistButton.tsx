@@ -96,7 +96,7 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
           setIsOpen(!isOpen);
           if (isOpen) setShowCreateForm(false); // Reset create form if closing
         }}
-        className="p-2 bg-gray-600 rounded-full hover:bg-gray-500 transition"
+        className="p-2 bg-indigo-600/80 rounded-full hover:bg-indigo-600/100 transition shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40"
         title="Adicionar à Playlist"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -105,8 +105,8 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 bottom-full mb-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-10 overflow-hidden">
-          <div className="p-3 text-sm font-semibold text-white border-b border-gray-700">
+        <div className="absolute right-0 bottom-full mb-2 w-64 bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg z-10 overflow-hidden">
+          <div className="p-3 text-sm font-semibold text-white border-b border-slate-300/10">
             {showCreateForm ? 'Criar Nova Playlist' : 'Adicionar a...'}
           </div>
           
@@ -117,21 +117,21 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
                 value={newPlaylistName}
                 onChange={(e) => setNewPlaylistName(e.target.value)}
                 placeholder="Nome da Playlist"
-                className="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                className="w-full bg-slate-700/50 backdrop-blur-sm border border-slate-600/80 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 disabled={isCreating}
               />
               <div className="flex justify-end space-x-2">
                 <button 
                   type="button" 
                   onClick={() => { setShowCreateForm(false); setNewPlaylistName(''); }} 
-                  className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-500 rounded-md transition"
+                  className="px-3 py-1.5 text-xs bg-slate-600/80 hover:bg-slate-600/100 rounded-md transition shadow-md shadow-slate-500/20 hover:shadow-slate-500/40"
                   disabled={isCreating}
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
-                  className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded-md transition"
+                  className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 rounded-md transition shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40"
                   disabled={isCreating}
                 >
                   {isCreating ? 'Criando...' : 'Criar e Adicionar'}
@@ -149,7 +149,7 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
                       <li key={playlist.id}>
                         <button
                           onClick={() => handleAddToPlaylist(playlist.id)}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm transition"
+                          className="w-full text-left px-3 py-2 hover:bg-slate-700/50 text-sm transition"
                         >
                           {playlist.name}
                         </button>
@@ -163,7 +163,7 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
               <div className="border-t border-gray-700 p-2">
                 <button 
                   onClick={() => setShowCreateForm(true)}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm text-indigo-400 rounded-md transition"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-700/50 text-sm text-indigo-400 rounded-md transition"
                 >
                   + Criar nova playlist
                 </button>

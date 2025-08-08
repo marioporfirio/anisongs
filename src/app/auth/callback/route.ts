@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     if (!error) {
       revalidatePath('/', 'layout');
       // The response object already has the cookies set by the setAll method
-      return response; // Return the response with cookies
+      return NextResponse.redirect(`${origin}/auth/post-login-redirect`);
     }
     console.error('Error exchanging code for session:', error);
   }
