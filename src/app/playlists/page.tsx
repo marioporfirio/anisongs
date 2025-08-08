@@ -1,10 +1,11 @@
 // src/app/playlists/page.tsx
-import Link from 'next/link';
+
 import { createServerClient } from '@supabase/ssr';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createPlaylist } from '@/app/actions';
+import PlaylistItemClient from './PlaylistItemClient';
 
 interface Playlist { id: number; name: string; description: string | null; }
 
@@ -65,10 +66,12 @@ export default async function PlaylistsPage() {
           {playlists.length > 0 ? (
             <div className="space-y-4">
               {playlists.map(playlist => (
-                <Link href={`/playlists/${playlist.id}`} key={playlist.id} className="block bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg p-4 transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl">
-                  <h3 className="text-xl font-bold">{playlist.name}</h3>
-                  <p className="text-gray-400 mt-1">{playlist.description || "Sem descrição"}</p>
-                </Link>
+                <PlaylistItemClient 
+                  key={playlist.id} 
+                  id={playlist.id} 
+                  name={playlist.name} 
+                  description={playlist.description} 
+                />
               ))}
             </div>
           ) : ( <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg p-6 text-center text-gray-400">Você ainda não criou nenhuma playlist.</div> )}
