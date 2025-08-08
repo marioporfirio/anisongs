@@ -1,18 +1,17 @@
 // src/components/Header.tsx
 import Link from 'next/link';
-import Image from 'next/image'; // Import Next Image
+import Image from 'next/image';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import GlobalSearch from './GlobalSearch';
 import { unstable_noStore as noStore } from 'next/cache';
 
-// Componente para o botão de logout
 function LogoutButton() {
   return (
     <form action="/auth/sign-out" method="post">
       <button 
         type="submit"
-        className="py-2 px-4 rounded-md no-underline bg-red-600 hover:bg-red-700 text-white font-bold transition"
+        className="py-2 px-4 rounded-md text-sm font-bold bg-red-600/80 hover:bg-red-600/100 text-white transition-all duration-300 shadow-lg shadow-red-500/20 hover:shadow-red-500/40"
       >
         Sair
       </button>
@@ -20,10 +19,9 @@ function LogoutButton() {
   );
 }
 
-// Componente principal do Header
 export default async function Header() {
-  noStore(); // Impede o cache deste componente
-  const cookieStore = await cookies(); // Await cookies
+  noStore();
+  const cookieStore = cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,11 +36,7 @@ export default async function Header() {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch { // Changed to empty catch block
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
+          } catch {}
         },
       },
     }
@@ -53,14 +47,14 @@ export default async function Header() {
   const userName = user?.email?.split('@')[0] || user?.user_metadata?.name || user?.user_metadata?.user_name;
 
   return (
-    <header className="bg-gray-800 border-b border-gray-700">
+    <header className="sticky top-0 z-50 bg-slate-900/60 backdrop-blur-lg border-b border-slate-300/10 shadow-lg shadow-black/20">
       <nav className="container mx-auto p-4 flex justify-between items-center gap-4">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-2xl font-bold text-white hover:text-indigo-400 transition">
-            AnimeMusic
+          <Link href="/" className="text-2xl font-bold text-white hover:text-indigo-400 transition-colors duration-300">
+            AniSongs
           </Link>
           {user && (
-             <Link href="/playlists" className="text-sm text-gray-300 hover:text-white">
+             <Link href="/playlists" className="text-sm text-gray-300 hover:text-white transition-colors duration-300">
               Minhas Playlists
             </Link>
           )}
@@ -72,23 +66,23 @@ export default async function Header() {
 
         <div className="text-white flex-shrink-0">
           {user ? (
-            <div className="flex items-center gap-3"> {/* Reduced gap slightly for avatar */}
+            <div className="flex items-center gap-4">
               {avatarUrl && (
                 <Image
                   src={avatarUrl}
                   alt="User avatar"
-                  width={32} // Adjust size as needed
-                  height={32} // Adjust size as needed
-                  className="rounded-full"
+                  width={36}
+                  height={36}
+                  className="rounded-full border-2 border-slate-600/80"
                 />
               )}
-              {userName && <span className="hidden sm:inline">Olá, {userName}</span>}
+              {userName && <span className="hidden sm:inline text-sm">Olá, {userName}</span>}
               <LogoutButton />
             </div>
           ) : (
             <Link
               href="/login"
-              className="py-2 px-4 rounded-md no-underline bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition"
+              className="py-2 px-4 rounded-md text-sm font-bold bg-indigo-600/80 hover:bg-indigo-600/100 text-white transition-all duration-300 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40"
             >
               Login
             </Link>
