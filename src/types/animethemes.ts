@@ -114,6 +114,8 @@ export interface ArtistThemeEntry {
   animeSlug: string; // ApiAnime.slug - for RatingStars and navigation
   animePosterUrl?: string; // A poster image for the anime
   videoLink?: string; // Direct link to play the video (ApiVideo.link)
+  year?: number; // Add year property
+  season?: string; // Add season property
   // For RatingStars - these might need to be fetched separately or passed if available
   averageRating?: number | null;
   userRating?: number | null;

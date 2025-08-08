@@ -12,7 +12,7 @@ interface Option {
 
 interface CustomSelectProps {
   options: Option[];
-  value: string;
+  value: string | null;
   onChange: (value: string) => void;
   placeholder: string;
 }
