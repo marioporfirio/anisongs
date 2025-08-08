@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useTransition, useCallback } from 'react'
 import { saveRating, getThemeRatingDetails } from '@/app/actions'
+import type { MouseEvent } from 'react'; // Importe o tipo MouseEvent
 
 interface RatingStarsProps {
   animeSlug: string
@@ -10,7 +11,6 @@ interface RatingStarsProps {
   isLoggedIn: boolean
 }
 
-// Ícone de estrela SVG - onMouseEnter foi movido para o wrapper do ícone
 const StarIcon = ({ className }: { className?: string }) => (
   <svg 
     className={className} 
@@ -35,12 +35,11 @@ export default function RatingStars({
   const [isSubmitting, startSubmitTransition] = useTransition();
 
   const fetchDetails = useCallback(async () => {
-    // Não precisa mais setar isLoading aqui, o estado inicial já cuida disso
     try {
       const details = await getThemeRatingDetails(animeSlug, themeSlug);
       setCurrentAverageScore(details.averageScore);
       setCurrentRatingCount(details.ratingCount);
-      setCurrentUserScore(details.userScore); // A lógica de login agora é tratada no backend/ação
+      setCurrentUserScore(details.userScore);
     } catch (error) {
       console.error("Failed to fetch rating details:", error);
     } finally {
@@ -52,11 +51,8 @@ export default function RatingStars({
     fetchDetails();
   }, [fetchDetails]);
 
-  // Função centralizada para lidar com a submissão
   const handleRatingSubmit = (scoreToSave: number | null) => {
-    if (!isLoggedIn || isSubmitting) return; // Proteção extra
-
-    // Atualização otimista da UI para resposta imediata
+    if (!isLoggedIn || isSubmitting) return;
     setCurrentUserScore(scoreToSave);
     
     startSubmitTransition(async () => {
@@ -67,25 +63,22 @@ export default function RatingStars({
         if (scoreToSave !== null) {
           formData.append('score', scoreToSave.toString());
         }
-        
         await saveRating(formData);
-        // Re-sincroniza com o servidor para obter a média e contagem atualizadas
         await fetchDetails(); 
       } catch (error) {
         console.error("Failed to save rating:", error);
-        // Em caso de erro, reverte a atualização otimista buscando os dados reais
         fetchDetails(); 
       }
     });
   };
 
-  // Nova função para lidar com o clique na estrela
-  const handleStarClick = (ratingValue: number) => {
-    // Se o usuário clicar na nota atual, remove a nota (envia null)
+  const handleStarClick = (e: MouseEvent<HTMLButtonElement>, ratingValue: number) => {
+    // AQUI ESTÁ A MUDANÇA PRINCIPAL!
+    e.stopPropagation(); 
+
     if (ratingValue === currentUserScore) {
       handleRatingSubmit(null);
     } else {
-      // Caso contrário, define a nova nota
       handleRatingSubmit(ratingValue);
     }
   };
@@ -94,7 +87,6 @@ export default function RatingStars({
     return <div className="text-sm text-gray-400 h-10 flex items-center">Loading ratings...</div>;
   }
 
-  // A nota a ser exibida (hover ou a nota atual do usuário)
   const displayScore = hoverRating || currentUserScore || 0;
 
   const renderRatingControls = () => {
@@ -103,29 +95,28 @@ export default function RatingStars({
     return (
       <div 
         className="flex items-center relative"
-        onMouseLeave={() => setHoverRating(0)} // Reseta o hover ao sair da área das estrelas
+        onMouseLeave={() => setHoverRating(0)}
       >
         {[...Array(10)].map((_, i) => {
           const ratingValue = i + 1;
-          
           const baseColorClass = 
             displayScore <= 2 ? 'text-red-500'
             : displayScore <= 4 ? 'text-orange-400'
             : displayScore <= 6 ? 'text-yellow-400'
             : displayScore <= 8 ? 'text-teal-400'
             : 'text-indigo-400';
-
           const starIconClassName = `w-6 h-6 transition-colors duration-200 ${
             ratingValue <= displayScore ? baseColorClass : 'text-gray-600'
           } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
 
           return (
-            // Agora usamos um botão para semântica e acessibilidade
             <button
               key={ratingValue}
-              type="button" // Previne submissão de formulário
+              type="button"
               className="appearance-none bg-transparent border-none p-0"
-              onClick={() => handleStarClick(ratingValue)}
+              // AQUI ESTÁ A MUDANÇA PRINCIPAL!
+              // Passamos o evento (e) para a função handler.
+              onClick={(e) => handleStarClick(e, ratingValue)}
               onMouseEnter={() => { 
                 if (!isSubmitting) setHoverRating(ratingValue);
               }}
@@ -141,7 +132,6 @@ export default function RatingStars({
   };
 
   return (
-    // Não precisamos mais de um formulário, pode ser um div
     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
       <div className="flex items-center gap-1 text-sm text-yellow-400">
         <StarIcon className="w-5 h-5" />
