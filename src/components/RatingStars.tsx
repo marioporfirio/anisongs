@@ -13,18 +13,17 @@ interface RatingStarsProps {
 }
 
 // Ícone de estrela SVG - AGORA ACEITA onMouseEnter
-const StarIcon = ({ className, onMouseEnter, style }: { className?: string; onMouseEnter?: () => void; style?: React.CSSProperties }) => (
+const StarIcon = ({ className, onMouseEnter }: { className?: string; onMouseEnter?: () => void }) => (
   <svg 
     className={className} 
     onMouseEnter={onMouseEnter} // Prop aplicada aqui
     xmlns="http://www.w3.org/2000/svg" 
     viewBox="0 0 24 24" 
     fill="currentColor"
-    style={style}
   >
     <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
   </svg>
-)
+);
 
 export default function RatingStars({
   animeSlug,
@@ -47,6 +46,7 @@ export default function RatingStars({
       setCurrentRatingCount(details.ratingCount);
       if (isLoggedIn) { // Only set user score if logged in, otherwise it remains null
         setCurrentUserScore(details.userScore);
+        console.log("Fetched user score:", details.userScore); // Add this line
       } else {
         setCurrentUserScore(null); // Ensure user score is null if not logged in
       }
@@ -140,17 +140,6 @@ export default function RatingStars({
                   if (!isSubmitting) {
                     setHoverRating(ratingValue);
                   }
-                }}
-                style={{
-                  boxShadow: ratingValue <= displayScore && (hoverRating > 0 || (currentUserScore as number) > 0)
-                    ? `0 0 8px 2px ${
-                        displayScore <= 2 ? 'rgba(239, 68, 68, 0.5)'
-                        : displayScore <= 4 ? 'rgba(251, 146, 60, 0.5)'
-                        : displayScore <= 6 ? 'rgba(250, 204, 21, 0.5)'
-                        : displayScore <= 8 ? 'rgba(20, 184, 166, 0.5)'
-                        : 'rgba(99, 102, 241, 0.5)'
-                      }`
-                    : 'none'
                 }}
               />
             </label>
