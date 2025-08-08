@@ -51,7 +51,7 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
   
   if (playlist.themes.length === 0) { 
     return (
-      <div className="bg-gray-800 p-6 rounded-lg text-center">
+      <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg p-6 text-center">
         <p className="text-gray-400 text-lg">Esta playlist ainda não tem músicas.</p>
         {isOwner && (
           <p className="text-gray-500 mt-2">Você pode adicionar músicas navegando pelo site e usando o botão de adicionar à playlist.</p>
@@ -64,7 +64,7 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
     <>
       <div className="space-y-4">
         {playlist.themes.map((themeItem: EnrichedPlaylistTheme) => (
-          <div key={themeItem.playlist_theme_id} className="bg-gray-800 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div key={themeItem.playlist_theme_id} className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl">
             <div className="flex-grow">
               <span className="font-bold text-indigo-400 text-sm">{themeItem.type.toUpperCase()}</span>
               <p className="text-lg text-white">{themeItem.title}</p>
@@ -76,7 +76,7 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
               {themeItem.videoLink && (
                 <button 
                   onClick={() => handlePlayVideo(themeItem.videoLink!)} 
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-500 transition-colors text-sm"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-500 transition-colors text-sm shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40"
                 >
                   ▶ Assistir
                 </button>
@@ -84,7 +84,7 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
               {isOwner && (
                 <button 
                   onClick={() => handleRemoveTheme(themeItem.playlist_theme_id)} 
-                  className="p-2 bg-red-700 rounded-full hover:bg-red-600 transition disabled:opacity-50" 
+                  className="p-2 bg-red-700 rounded-full hover:bg-red-600 transition disabled:opacity-50 shadow-lg shadow-red-500/20 hover:shadow-red-500/40" 
                   title="Remover da Playlist"
                   disabled={removingThemeId === themeItem.playlist_theme_id}
                 >
