@@ -10,11 +10,6 @@ import VideoPlayerModal from "@/components/VideoPlayerModal";
 import Link from "next/link";
 import AddToPlaylistButton from "@/components/AddToPlaylistButton";
 
-interface ArtistThemeEntryWithRelease extends ArtistThemeEntry {
-  year?: number;
-  season?: string;
-}
-
 const seasonOrder: { [key: string]: number } = {
   Winter: 1,
   Spring: 2,
@@ -32,7 +27,6 @@ export default function ArtistPage() {
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   
-  // Estados para a nova lógica de ordenação
   const [sortBy, setSortBy] = useState<'alphabetical' | 'releaseDate'>('alphabetical');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -87,7 +81,7 @@ export default function ArtistPage() {
                        || apiArtist.images?.[0]?.link 
                        || '/placeholder.png';
 
-        const songsByAnime = new Map<string, ArtistThemeEntryWithRelease[]>();
+        const songsByAnime = new Map<string, ArtistThemeEntry[]>();
 
         if (apiArtist.songs) {
           for (const song of apiArtist.songs) {
@@ -102,7 +96,7 @@ export default function ArtistPage() {
                   
                   const video = theme.animethemeentries?.[0]?.videos?.[0];
 
-                  const themeEntry: ArtistThemeEntryWithRelease = {
+                  const themeEntry: ArtistThemeEntry = {
                     themeId: theme.id,
                     themeSlug: theme.slug,
                     songTitle: theme.song.title,
@@ -111,7 +105,7 @@ export default function ArtistPage() {
                     animePosterUrl: animePoster,
                     videoLink: video?.link,
                     year: theme.anime.year,
-                    season: theme.anime.season,
+                    season: theme.anime.season || undefined,
                   };
 
                   if (!songsByAnime.has(animeName)) {
@@ -148,7 +142,6 @@ export default function ArtistPage() {
     fetchArtistDetails();
   }, [artistSlug]);
 
-  // Nova função para lidar com cliques nos botões de ordenação
   const handleSortChange = (newSortBy: 'alphabetical' | 'releaseDate') => {
     if (newSortBy === sortBy) {
       setSortOrder(prevOrder => (prevOrder === 'asc' ? 'desc' : 'asc'));
@@ -193,15 +186,14 @@ export default function ArtistPage() {
     setVideoForModal(null);
   }, []);
 
-  if (isLoading) { /* ... */ }
-  if (error) { /* ... */ }
-  if (!artistData) { /* ... */ }
+  if (isLoading) { return <p>Loading...</p>; }
+  if (error) { return <p>Error: {error}</p>; }
+  if (!artistData) { return <p>No artist data found.</p>; }
 
   return (
     <div className="container mx-auto p-4 md:p-6 text-white">
-      {/* Artist Header */}
       <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 mb-8">
-        {artistData?.imageUrl && (
+        {artistData.imageUrl && (
           <div className="flex-shrink-0 w-48 h-48 md:w-64 md:h-64 relative rounded-lg overflow-hidden shadow-2xl border-2 border-gray-700">
             <Image
               src={artistData.imageUrl}
@@ -215,9 +207,9 @@ export default function ArtistPage() {
         )}
         <div className="flex-grow pt-2 text-center md:text-left">
           <h1 className="text-4xl md:text-6xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-indigo-600">
-            {artistData?.name}
+            {artistData.name}
           </h1>
-          {artistData?.information && (
+          {artistData.information && (
             <p className="text-gray-400 mb-4 whitespace-pre-wrap text-sm md:text-base max-w-prose">
               {artistData.information}
             </p>
@@ -225,7 +217,6 @@ export default function ArtistPage() {
         </div>
       </div>
 
-      {/* Song List Section */}
       <div>
         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 border-b-2 border-gray-700 pb-3">
           <h2 className="text-3xl font-semibold mb-3 sm:mb-0">Songs & Themes</h2>
@@ -248,15 +239,15 @@ export default function ArtistPage() {
         {sortedAnimeList.length === 0 && !isLoading && (
           <div className="text-center py-12">
             <p className="text-gray-400 text-xl">No songs found for this artist.</p>
-            <p className="text-gray-500 mt-2">There might be no data available or the artist hasn't performed any anime themes.</p>
+            <p className="text-gray-500 mt-2">There might be no data available or the artist hasn&apos;t performed any anime themes.</p>
           </div>
         )}
         
         <div className="space-y-8">
-          {sortedAnimeList.map(([animeName, themes]) => (
+          {(sortedAnimeList as [string, ArtistThemeEntry[]][]).map(([animeName, themes]) => (
             <div key={animeName} className="bg-gray-800/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-gray-700/80">
               <h3 className="text-2xl font-bold text-indigo-400 p-4 bg-gray-900/70">
-                <Link href={`/anime/${themes[0]?.animeSlug}`} className="hover:underline hover:text-indigo-300 transition-colors">
+                <Link href={`/anime/${themes[0]?.animeSlug}`} key={themes[0]?.animeSlug}>
                   {animeName}
                 </Link>
               </h3>
@@ -285,8 +276,8 @@ export default function ArtistPage() {
                     </div>
                     <div className="mt-4 border-t border-gray-700 pt-4">
                        <RatingStars
-                          animeSlug={theme.animeSlug}
-                          themeSlug={theme.themeSlug}
+                          animeSlug={theme.animeSlug!}
+                          themeSlug={theme.themeSlug!}
                           isLoggedIn={isUserLoggedIn} 
                         />
                     </div>
