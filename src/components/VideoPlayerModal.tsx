@@ -18,15 +18,15 @@ export default function VideoPlayerModal({ videoUrl, onClose }: VideoPlayerModal
     >
       {/* Modal Content */}
       <div 
-        className="bg-gray-900 p-4 rounded-lg shadow-xl relative w-full max-w-4xl"
+        className="bg-slate-900/80 backdrop-blur-lg p-4 rounded-2xl shadow-2xl shadow-indigo-500/20 relative w-full max-w-4xl border border-slate-300/10"
         onClick={(e) => e.stopPropagation()} // Impede que o clique no vídeo feche o modal
       >
-        <button onClick={onClose} className="absolute top-2 right-2 text-white text-2xl">×</button>
+        <button onClick={onClose} className="absolute top-2 right-2 text-white text-3xl p-2 rounded-full hover:bg-slate-700/50 transition-colors">×</button>
         <video
           controls
           autoPlay
           src={videoUrl}
-          className="w-full h-full rounded"
+          className="w-full h-full rounded-xl"
         >
           Seu navegador não suporta o formato de vídeo WebM.
         </video>
