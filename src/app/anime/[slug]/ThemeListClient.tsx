@@ -27,7 +27,7 @@ function ThemeItem({
       variants={itemVariants}
       className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-slate-300/10 transition-all duration-300 hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10"
     >
-      <div className="flex-grow w-full">
+      <div className="flex-grow w-full cursor-pointer" onClick={() => video && onPlay(video.link)}>
         <div className='flex justify-between items-start'>
             <div>
                 <span className="font-bold text-indigo-400 text-sm">{theme.slug.toUpperCase()}</span>
@@ -37,7 +37,7 @@ function ThemeItem({
                     {theme.song.artists.map((artist, index) => (
                       artist.slug ? (
                         <span key={artist.id}>
-                          <Link href={`/artist/${artist.slug}`} className="hover:text-indigo-300 hover:underline transition-colors">
+                          <Link href={`/artist/${artist.slug}`} onClick={(e) => e.stopPropagation()} className="hover:text-indigo-300 hover:underline transition-colors">
                             {artist.name}
                           </Link>
                           {index < theme.song!.artists!.length - 1 ? ', ' : ''}
@@ -53,7 +53,7 @@ function ThemeItem({
                 )}
             </div>
             {video && (
-            <button onClick={() => onPlay(video.link)} className="bg-indigo-600/80 text-white px-3 py-1.5 rounded-full hover:bg-indigo-600/100 transition-all duration-300 shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 flex-shrink-0 ml-4 sm:hidden">▶</button>
+            <button onClick={(e) => { e.stopPropagation(); onPlay(video.link); }} className="bg-indigo-600/80 text-white px-3 py-1.5 rounded-full hover:bg-indigo-600/100 transition-all duration-300 shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 flex-shrink-0 ml-4 sm:hidden">▶</button>
           )}
         </div>
         <div className="mt-2">
@@ -61,8 +61,8 @@ function ThemeItem({
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        {isLoggedIn && <AddToPlaylistButton themeId={theme.id} />}
-        {video && <button onClick={() => onPlay(video.link)} className="bg-indigo-600/80 text-white px-4 py-2 rounded-full hover:bg-indigo-600/100 transition-all duration-300 shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 hidden sm:block">▶ Assistir</button>}
+        {isLoggedIn && <div onClick={(e) => e.stopPropagation()}><AddToPlaylistButton themeId={theme.id} /></div>}
+        {video && <button onClick={(e) => { e.stopPropagation(); onPlay(video.link); }} className="bg-indigo-600/80 text-white px-4 py-2 rounded-full hover:bg-indigo-600/100 transition-all duration-300 shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/40 hidden sm:block">▶ Assistir</button>}
       </div>
     </motion.div>
   );

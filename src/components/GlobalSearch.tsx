@@ -89,11 +89,11 @@ export default function GlobalSearch() {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => { if (query.length > 2) setIsDropdownOpen(true); }}
         placeholder="Buscar animes, músicas, artistas..."
-        className="w-full bg-gray-700 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+        className="w-full bg-slate-700/50 backdrop-blur-sm border border-slate-600/80 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
       />
 
       {isDropdownOpen && (
-        <div className="absolute top-full mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-30 max-h-96 overflow-y-auto">
+        <div className="absolute top-full mt-2 w-full bg-slate-800/90 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg z-30 max-h-96 overflow-y-auto">
           {isLoading && <div className="p-4 text-gray-400 text-center">Buscando...</div>}
           
           {!isLoading && !hasResults && debouncedQuery.length > 2 && (
@@ -104,10 +104,10 @@ export default function GlobalSearch() {
             <ul>
               {(results.anime?.length ?? 0) > 0 && (
                 <>
-                  <li className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">Animes</li>
+                  <li className="px-4 py-2 text-xs font-bold text-slate-400 uppercase">Animes</li>
                   {results.anime?.map(anime => (
                     <li key={`anime-search-${anime.slug}`}>
-                      <Link href={`/anime/${anime.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-gray-700 transition-colors">
+                      <Link href={`/anime/${anime.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-slate-700/50 transition-colors">
                         {anime.name}
                       </Link>
                     </li>
@@ -116,14 +116,14 @@ export default function GlobalSearch() {
               )}
               {(results.artists?.length ?? 0) > 0 && (
                 <>
-                  <li className="px-4 py-2 text-xs font-bold text-gray-500 uppercase border-t border-gray-700">Artistas</li>
+                  <li className="px-4 py-2 text-xs font-bold text-slate-400 uppercase border-t border-slate-300/10">Artistas</li>
                   {results.artists?.map(artist => (
                     <li key={`artist-search-${artist.slug}`}>
                       {/* Use the new handler for artist clicks */}
                       <a 
                         href={`/artist/${artist.slug}`} // Fallback href, actual navigation is prevented
                         onClick={(e) => handleArtistResultClick(artist.slug, e)} 
-                        className="block px-4 py-2 hover:bg-gray-700 cursor-pointer"
+                        className="block px-4 py-2 hover:bg-slate-700/50 cursor-pointer"
                       >
                         {artist.name}
                       </a>
@@ -133,11 +133,11 @@ export default function GlobalSearch() {
               )}
               {(results.animethemes?.length ?? 0) > 0 && (
                 <>
-                  <li className="px-4 py-2 text-xs font-bold text-gray-500 uppercase border-t border-gray-700">Músicas</li>
+                  <li className="px-4 py-2 text-xs font-bold text-slate-400 uppercase border-t border-slate-300/10">Músicas</li>
                   {results.animethemes?.map(theme => (
                     theme.anime && (
                       <li key={`theme-search-${theme.anime.slug}-${theme.slug}`}>
-                        <Link href={`/anime/${theme.anime.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-gray-700 transition-colors">
+                        <Link href={`/anime/${theme.anime.slug}`} onClick={handleLinkClick} className="block px-4 py-2 hover:bg-slate-700/50 transition-colors">
                           <span className="font-bold">{theme.song?.title || 'Título Desconhecido'}</span>
                           <span className="block text-sm text-gray-400">{theme.anime.name} - {theme.slug.toUpperCase()}</span>
                         </Link>

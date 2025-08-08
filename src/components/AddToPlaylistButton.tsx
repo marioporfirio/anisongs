@@ -105,7 +105,7 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 bottom-full mb-2 w-64 bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg z-10 overflow-hidden">
+        <div className="absolute right-0 bottom-full mb-2 w-64 bg-slate-800/90 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg z-10 overflow-hidden">
           <div className="p-3 text-sm font-semibold text-white border-b border-slate-300/10">
             {showCreateForm ? 'Criar Nova Playlist' : 'Adicionar a...'}
           </div>

@@ -9,6 +9,7 @@ export default function PostLoginRedirectPage() {
   useEffect(() => {
     // This will force a client-side navigation to the root,
     // which should trigger a re-evaluation of the session.
+    router.refresh(); // Invalidate router cache and re-fetch data
     router.replace('/');
   }, [router]);
 

@@ -119,7 +119,11 @@ export default function RatingStars({
                 <StarIcon
                   className={`w-6 h-6 transition-colors ${
                     ratingValue <= (hoverRating || currentUserScore || 0)
-                      ? 'text-yellow-400'
+                      ? ratingValue <= 2 ? 'text-red-500'
+                      : ratingValue <= 4 ? 'text-orange-400'
+                      : ratingValue <= 6 ? 'text-yellow-400'
+                      : ratingValue <= 8 ? 'text-teal-400'
+                      : 'text-indigo-400'
                       : 'text-gray-600'
                   } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                   onMouseEnter={() => !isSubmitting && setHoverRating(ratingValue)}
