@@ -13,13 +13,14 @@ interface RatingStarsProps {
 }
 
 // Ícone de estrela SVG - AGORA ACEITA onMouseEnter
-const StarIcon = ({ className, onMouseEnter }: { className?: string; onMouseEnter?: () => void }) => (
+const StarIcon = ({ className, onMouseEnter, style }: { className?: string; onMouseEnter?: () => void; style?: React.CSSProperties }) => (
   <svg 
     className={className} 
     onMouseEnter={onMouseEnter} // Prop aplicada aqui
     xmlns="http://www.w3.org/2000/svg" 
     viewBox="0 0 24 24" 
     fill="currentColor"
+    style={style}
   >
     <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
   </svg>
@@ -101,22 +102,6 @@ export default function RatingStars({
 
   const displayScore = hoverRating || currentUserScore || 0;
 
-  const glowClassName = `absolute -inset-2 pointer-events-none transition-all duration-200 ease-out 
-    ${displayScore <= 2 ? 'shadow-red-500/50'
-    : displayScore <= 4 ? 'shadow-orange-400/50'
-    : displayScore <= 6 ? 'shadow-yellow-400/50'
-    : displayScore <= 8 ? 'shadow-teal-400/50'
-    : 'shadow-indigo-400/50'
-  }`;
-
-  const glowBoxShadow = `0 0 15px 5px ${
-    displayScore <= 2 ? 'rgba(239, 68, 68, 0.5)'
-    : displayScore <= 4 ? 'rgba(251, 146, 60, 0.5)'
-    : displayScore <= 6 ? 'rgba(250, 204, 21, 0.5)'
-    : displayScore <= 8 ? 'rgba(20, 184, 166, 0.5)'
-    : 'rgba(99, 102, 241, 0.5)'
-  }`;
-
   const renderRatingControls = () => {
     if (!isLoggedIn) return null;
 
@@ -139,7 +124,7 @@ export default function RatingStars({
           } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`;
 
           return (
-            <label key={ratingValue} className="cursor-pointer">
+            <label key={ratingValue} className="cursor-pointer" onClick={(e) => e.stopPropagation()}>
               <input
                 type="radio"
                 name="score"
@@ -151,24 +136,26 @@ export default function RatingStars({
               />
               <StarIcon
                 className={starIconClassName}
-                                  onMouseEnter={() => { 
-                    if (!isSubmitting) {
-                      setHoverRating(ratingValue);
-                    }
-                  }}
+                onMouseEnter={() => { 
+                  if (!isSubmitting) {
+                    setHoverRating(ratingValue);
+                  }
+                }}
+                style={{
+                  boxShadow: ratingValue <= displayScore && (hoverRating > 0 || (currentUserScore as number) > 0)
+                    ? `0 0 8px 2px ${
+                        displayScore <= 2 ? 'rgba(239, 68, 68, 0.5)'
+                        : displayScore <= 4 ? 'rgba(251, 146, 60, 0.5)'
+                        : displayScore <= 6 ? 'rgba(250, 204, 21, 0.5)'
+                        : displayScore <= 8 ? 'rgba(20, 184, 166, 0.5)'
+                        : 'rgba(99, 102, 241, 0.5)'
+                      }`
+                    : 'none'
+                }}
               />
             </label>
           );
         })}
-        {/* Glow effect */}
-        {(hoverRating > 0 || (currentUserScore as number) > 0) ? (
-          <div 
-            className={glowClassName}
-            style={{
-              boxShadow: glowBoxShadow
-            }}
-          ></div>
-        ) : null}
       </div>
     );
   };
