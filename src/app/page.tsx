@@ -150,6 +150,7 @@ function HomePageContent() {
               artists={theme.song?.artists}
               posterUrl={posterImage?.link}
               isLoggedIn={!!session}
+              videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
             />
           );
         })}

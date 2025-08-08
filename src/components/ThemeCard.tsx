@@ -3,6 +3,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import AddToPlaylistButton from './AddToPlaylistButton';
+import { useState } from 'react';
+import VideoPlayerModal from './VideoPlayerModal';
 
 interface Artist {
   id: number;
@@ -19,6 +21,7 @@ interface ThemeCardProps {
   artists?: Artist[];
   posterUrl?: string;
   isLoggedIn: boolean;
+  videoUrl?: string;
 }
 
 export default function ThemeCard({
@@ -30,7 +33,17 @@ export default function ThemeCard({
   artists,
   posterUrl,
   isLoggedIn,
+  videoUrl,
 }: ThemeCardProps) {
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+
+  const handlePlayVideo = (url: string) => {
+    setSelectedVideoUrl(url);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedVideoUrl(null);
+  };
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
@@ -41,16 +54,32 @@ export default function ThemeCard({
       variants={cardVariants}
       className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg overflow-hidden shadow-lg h-full flex flex-col group transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl"
     >
-      <Link href={`/anime/${animeSlug}`} className="relative w-full h-40 overflow-hidden bg-black flex-shrink-0 block">
-        <Image
-          src={posterUrl || '/placeholder.png'}
-          alt={`Poster for ${animeName}`}
-          fill
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className="object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-      </Link>
+      {videoUrl ? (
+        <div 
+          className="relative w-full h-40 overflow-hidden bg-black flex-shrink-0 block cursor-pointer"
+          onClick={() => handlePlayVideo(videoUrl)}
+        >
+          <Image
+            src={posterUrl || '/placeholder.png'}
+            alt={`Poster for ${animeName}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+        </div>
+      ) : (
+        <Link href={`/anime/${animeSlug}`} className="relative w-full h-40 overflow-hidden bg-black flex-shrink-0 block">
+          <Image
+            src={posterUrl || '/placeholder.png'}
+            alt={`Poster for ${animeName}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+        </Link>
+      )}
       <div className="p-4 flex-grow flex flex-col justify-between">
         <div>
           <h3 className="text-md font-bold text-white truncate" title={songTitle || 'Untitled'}>
@@ -87,6 +116,7 @@ export default function ThemeCard({
           {isLoggedIn && <AddToPlaylistButton themeId={themeId} />}
         </div>
       </div>
+      <VideoPlayerModal videoUrl={selectedVideoUrl} onClose={handleCloseModal} />
     </motion.div>
   );
 }
