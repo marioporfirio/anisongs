@@ -1,11 +1,13 @@
 // src/app/actions.ts
 'use server'
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
-async function createSupabaseClient() { // Make function async
-  const cookieStore = await cookies(); // Await cookies
+// Função auxiliar para criar o cliente Supabase nas Server Actions
+function createSupabaseClient() {
+  const cookieStore = cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,10 +22,8 @@ async function createSupabaseClient() { // Make function async
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch { // Changed to empty catch block
-            // The `setAll` method was called from a Server Action.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+          } catch {
+            // Ignorado, como recomendado na documentação do Supabase
           }
         },
       },
@@ -31,59 +31,111 @@ async function createSupabaseClient() { // Make function async
   );
 }
 
+// Salva, atualiza ou remove uma avaliação de tema
 export async function saveRating(formData: FormData) {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { throw new Error("Você precisa estar logado para avaliar.") }
+
+  if (!user) {
+    throw new Error("Você precisa estar logado para avaliar.");
+  }
 
   const scoreStr = formData.get('score') as string;
   const animeSlug = formData.get('animeSlug') as string;
   const themeSlug = formData.get('themeSlug') as string;
 
   if (!animeSlug || !themeSlug) { 
-    throw new Error("Dados insuficientes para salvar a avaliação (animeSlug, ou themeSlug ausente).") 
+    throw new Error("Dados insuficientes para salvar a avaliação.");
   }
 
-  let scoreNum: number | null = null;
-  if (scoreStr) {
-    scoreNum = parseFloat(scoreStr);
-    if (isNaN(scoreNum)) {
-      console.error(`Tentativa de salvar avaliação com score inválido: ${scoreStr}`);
-      throw new Error("Valor de score inválido.");
-    }
+  const scoreNum = scoreStr ? parseFloat(scoreStr) : null;
+  if (scoreStr && isNaN(scoreNum as number)) {
+    throw new Error("Valor de score inválido.");
   }
 
-  if (scoreNum === null) {
-    // Delete the rating if score is null
-    const { error } = await supabase.from('ratings')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('anime_slug', animeSlug)
-      .eq('theme_slug', themeSlug);
+  try {
+    if (scoreNum === null) {
+      // Deleta a avaliação se a nota for nula
+      const { error } = await supabase.from('ratings')
+        .delete()
+        .match({
+          user_id: user.id,
+          anime_slug: animeSlug,
+          theme_slug: themeSlug
+        });
+      if (error) { throw error; }
 
-    if (error) {
-      console.error("Erro ao deletar avaliação no Supabase:", error);
-      throw new Error("Não foi possível deletar sua avaliação.");
+    } else {
+      // Cria ou atualiza a avaliação (upsert)
+      const { error } = await supabase.from('ratings').upsert(
+        { 
+          user_id: user.id, 
+          anime_slug: animeSlug, 
+          theme_slug: themeSlug, 
+          score: scoreNum, 
+        },
+        {
+          onConflict: 'user_id, anime_slug, theme_slug' // Sintaxe correta para sua versão
+        }
+      );
+      if (error) { throw error; }
     }
-  } else {
-    // Upsert the rating
-    const { error } = await supabase.from('ratings').upsert({ 
-      user_id: user.id, 
-      anime_slug: animeSlug, 
-      theme_slug: themeSlug, 
-      score: scoreNum, 
-    });
 
-    if (error) { 
-      console.error("Erro ao salvar avaliação no Supabase:", error); 
-      throw new Error("Não foi possível salvar sua avaliação. Verifique os logs do servidor para detalhes do erro do Supabase."); 
-    }
+    revalidatePath(`/anime/${animeSlug}`);
+
+  } catch (error) {
+    console.error("Erro ao processar a avaliação no Supabase:", error);
+    throw new Error("Não foi possível salvar sua avaliação. Verifique os logs do servidor.");
   }
-  revalidatePath(`/anime/${animeSlug}`);
 }
 
+// Interface para o resultado da função RPC
+interface ThemeRatingDetailsRpcResult {
+  average_score: number | null;
+  rating_count: number;
+  user_score: number | null;
+}
+
+// Busca os detalhes da avaliação de um tema usando a função RPC otimizada
+export async function getThemeRatingDetails(animeSlug: string, themeSlug: string): Promise<{
+  averageScore: number | null;
+  ratingCount: number;
+  userScore: number | null;
+}> {
+  const supabase = createSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Chama a função RPC
+  const { data, error } = await supabase
+    .rpc('get_theme_rating_details', {
+      p_anime_slug: animeSlug,
+      p_theme_slug: themeSlug,
+      p_user_id: user?.id,
+    })
+    .single();
+
+  if (error) {
+    console.error("Erro ao chamar a RPC get_theme_rating_details:", error);
+    return { averageScore: null, ratingCount: 0, userScore: null };
+  }
+  
+  // Usa asserção de tipo para informar ao TypeScript o formato dos dados
+  const result = data as ThemeRatingDetailsRpcResult;
+
+  const averageScore = result.average_score ? parseFloat(Number(result.average_score).toFixed(1)) : null;
+
+  return {
+    averageScore: averageScore,
+    ratingCount: result.rating_count || 0,
+    userScore: result.user_score || null,
+  };
+}
+
+
+// --- Funções de Playlist ---
+
 export async function getUserPlaylists() {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data: playlists, error } = await supabase.from('playlists').select('id, name').eq('user_id', user.id).order('created_at', { ascending: false });
@@ -92,58 +144,57 @@ export async function getUserPlaylists() {
 }
 
 export async function addThemeToPlaylist(formData: FormData) {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, message: "Usuário não autenticado." };
+
   const playlistId = formData.get('playlistId') as string;
   const themeId = formData.get('themeId') as string;
   if (!playlistId || !themeId) return { success: false, message: "Dados inválidos." };
+
+  const { data: playlist, error: ownerError } = await supabase.from('playlists').select('id').eq('user_id', user.id).eq('id', playlistId).maybeSingle();
+  if (ownerError || !playlist) return { success: false, message: "Playlist não encontrada ou não pertence a você." };
+
   const { data: existing, error: selectError } = await supabase.from('playlist_themes').select('id').eq('playlist_id', parseInt(playlistId)).eq('theme_id', parseInt(themeId)).maybeSingle();
   if (selectError) { console.error("Erro ao verificar tema existente:", selectError); return { success: false, message: "Erro no servidor." }; }
-  if (existing) return { success: false, message: "Esta música já está na playlist." };
+  if (existing) return { success: true, message: "Esta música já está na playlist." };
+
   const { error } = await supabase.from('playlist_themes').insert({ playlist_id: parseInt(playlistId), theme_id: parseInt(themeId) });
   if (error) { console.error("Erro ao adicionar tema:", error); return { success: false, message: "Não foi possível adicionar a música." }; }
+
+  revalidatePath(`/playlists/${playlistId}`);
   return { success: true, message: "Música adicionada com sucesso!" };
 }
 
 export async function createPlaylist(formData: FormData): Promise<void> {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { throw new Error("Usuário não autenticado."); }
+
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const isPublic = formData.get('isPublic') === 'on';
   if (!name) { throw new Error("O nome da playlist é obrigatório."); }
+
   const { error } = await supabase.from('playlists').insert({ user_id: user.id, name: name, description: description, is_public: isPublic });
   if (error) { console.error("Erro ao criar playlist:", error); throw new Error("Não foi possível criar a playlist."); }
   revalidatePath('/playlists');
 }
 
 export async function deletePlaylist(formData: FormData) {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { return { success: false, message: "Usuário não autenticado." }; }
 
   const playlistId = formData.get('playlistId') as string;
-
   if (!playlistId) { return { success: false, message: "ID da playlist inválido." }; }
 
-  // Verify ownership before deleting
-  const { data: playlist, error: fetchError } = await supabase
-    .from('playlists')
-    .select('user_id')
-    .eq('id', parseInt(playlistId))
-    .single();
-
+  const { data: playlist, error: fetchError } = await supabase.from('playlists').select('user_id').eq('id', parseInt(playlistId)).single();
   if (fetchError || !playlist || playlist.user_id !== user.id) {
     return { success: false, message: "Não autorizado ou playlist não encontrada." };
   }
 
-  const { error: deleteError } = await supabase
-    .from('playlists')
-    .delete()
-    .eq('id', parseInt(playlistId));
-  
+  const { error: deleteError } = await supabase.from('playlists').delete().eq('id', parseInt(playlistId));
   if (deleteError) {
     console.error("Erro ao deletar playlist:", deleteError);
     return { success: false, message: "Não foi possível deletar a playlist." };
@@ -153,32 +204,21 @@ export async function deletePlaylist(formData: FormData) {
   return { success: true, message: "Playlist deletada com sucesso!" };
 }
 
-// --- FUNÇÃO QUE ESTAVA FALTANDO ---
 export async function removeThemeFromPlaylist(formData: FormData) {
-  const supabase = await createSupabaseClient();
+  const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { return { success: false, message: "Usuário não autenticado." }; }
 
   const playlistId = formData.get('playlistId') as string;
   const playlistThemeId = formData.get('playlistThemeId') as string;
-
   if (!playlistId || !playlistThemeId) { return { success: false, message: "Dados inválidos." }; }
-
-  const { data: playlist } = await supabase
-    .from('playlists')
-    .select('user_id')
-    .eq('id', parseInt(playlistId))
-    .single();
-
+  
+  const { data: playlist } = await supabase.from('playlists').select('user_id').eq('id', parseInt(playlistId)).single();
   if (!playlist || playlist.user_id !== user.id) {
     return { success: false, message: "Não autorizado." };
   }
-
-  const { error } = await supabase
-    .from('playlist_themes')
-    .delete()
-    .eq('id', parseInt(playlistThemeId));
   
+  const { error } = await supabase.from('playlist_themes').delete().eq('id', parseInt(playlistThemeId));
   if (error) {
     console.error("Erro ao remover tema:", error);
     return { success: false, message: "Não foi possível remover a música." };
@@ -188,137 +228,57 @@ export async function removeThemeFromPlaylist(formData: FormData) {
   return { success: true, message: "Música removida com sucesso!" };
 }
 
-// --- FUNÇÃO PARA BUSCAR DETALHES DA PLAYLIST ---
-export interface PlaylistThemeItemData { // Renamed to avoid conflict if used client-side with same name
-  playlist_theme_id: number; // ID from the playlist_themes table, for removal
-  theme_id: number; // ID of the theme itself (from animethemes.moe)
-  // Details to be fetched from animethemes.moe API later on the page:
-  title?: string;
-  animeName?: string;
-  animeSlug?: string;
-  videoLink?: string;
-  // Optional: any other data from animethemes.moe we might want
-  type?: string; // e.g. OP1, ED2
+export interface PlaylistThemeItemData {
+  playlist_theme_id: number;
+  theme_id: number;
 }
 
 export interface PlaylistDetails {
   id: number;
   name: string;
   description: string | null;
-  themes: PlaylistThemeItemData[]; // Use the renamed interface
-  is_public: boolean; // Added for potential future use
-  user_id: string; // Added for ownership checks or public viewing logic
+  themes: PlaylistThemeItemData[];
+  is_public: boolean;
+  user_id: string;
 }
 
 export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDetails | null> {
-  const supabase = await createSupabaseClient();
-  // No user check here initially, to allow fetching public playlist data later if needed.
-  // Ownership check will be done after fetching.
+  const supabase = createSupabaseClient();
 
-  // 1. Fetch playlist metadata
   const { data: playlistData, error: playlistError } = await supabase
     .from('playlists')
-    .select('id, name, description, user_id, is_public') // fetch is_public and user_id
+    .select('id, name, description, user_id, is_public')
     .eq('id', playlistId)
     .single();
 
-  if (playlistError) {
+  if (playlistError || !playlistData) {
     console.error(`Erro ao buscar metadados da playlist ${playlistId}:`, playlistError);
     return null;
   }
 
-  if (!playlistData) {
-    console.warn(`Playlist com ID ${playlistId} não encontrada.`);
-    return null;
-  }
-
-  // If the playlist is private, only the owner can see it.
-  // A session is needed to check ownership for private playlists.
   if (!playlistData.is_public) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.warn(`Tentativa de acesso não autenticado à playlist privada ${playlistId}.`);
-      return null; // Not found for anonymous users if private
-    }
-    if (playlistData.user_id !== user.id) {
-      console.warn(`Usuário ${user.id} tentou acessar playlist privada ${playlistId} que não lhe pertence.`);
-      return null; // Not found if not owner of private playlist
+    if (!user || playlistData.user_id !== user.id) {
+      console.warn(`Acesso negado à playlist privada ${playlistId}.`);
+      return null;
     }
   }
   
-  // 2. Fetch theme IDs associated with the playlist
   const { data: themeEntries, error: themesError } = await supabase
     .from('playlist_themes')
-    .select('id, theme_id') // 'id' here is playlist_themes.id
+    .select('id, theme_id')
     .eq('playlist_id', playlistId)
-    .order('created_at', { ascending: true }); // Optional: order by when they were added
+    .order('created_at', { ascending: true });
 
   if (themesError) {
     console.error(`Erro ao buscar temas da playlist ${playlistId}:`, themesError);
-    // Return playlist metadata even if themes fail to load, with empty themes list.
-    return {
-      id: playlistData.id,
-      name: playlistData.name,
-      description: playlistData.description,
-      themes: [],
-      is_public: playlistData.is_public,
-      user_id: playlistData.user_id,
-    };
+    return { ...playlistData, themes: [] };
   }
 
   const themes: PlaylistThemeItemData[] = themeEntries.map(entry => ({
-    playlist_theme_id: entry.id, // This is playlist_themes.id
-    theme_id: entry.theme_id,   // This is the animetheme.moe theme ID
+    playlist_theme_id: entry.id,
+    theme_id: entry.theme_id,
   }));
 
-  return {
-    id: playlistData.id,
-    name: playlistData.name,
-    description: playlistData.description,
-    themes,
-    is_public: playlistData.is_public,
-    user_id: playlistData.user_id,
-  };
-}
-
-export async function getThemeRatingDetails(animeSlug: string, themeSlug: string): Promise<{
-  averageScore: number | null;
-  ratingCount: number;
-  userScore: number | null;
-}> {
-  const supabase = await createSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // Fetch all ratings for this theme
-  const { data: ratings, error: ratingsError } = await supabase
-    .from('ratings')
-    .select('score, user_id')
-    .eq('anime_slug', animeSlug)
-    .eq('theme_slug', themeSlug);
-
-  if (ratingsError) {
-    console.error("Error fetching ratings for theme stats:", ratingsError);
-    // Return default/empty stats on error, or throw
-    return { averageScore: null, ratingCount: 0, userScore: null };
-  }
-
-  let sumOfScores = 0;
-  let currentUserScore: number | null = null;
-
-  if (ratings && ratings.length > 0) {
-    ratings.forEach(rating => {
-      sumOfScores += rating.score;
-      if (user && rating.user_id === user.id) {
-        currentUserScore = rating.score;
-      }
-    });
-    const average = sumOfScores / ratings.length;
-    return {
-      averageScore: parseFloat(average.toFixed(1)), // Round to one decimal place
-      ratingCount: ratings.length,
-      userScore: currentUserScore,
-    };
-  }
-
-  return { averageScore: null, ratingCount: 0, userScore: null };
+  return { ...playlistData, themes };
 }
