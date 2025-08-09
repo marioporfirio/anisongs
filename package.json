@@ -13,12 +13,14 @@
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.50.1",
+    "axios": "^1.11.0",
     "framer-motion": "^12.23.12",
     "geist": "^1.4.2",
     "next": "^14.2.5",
     "react": "^18",
     "react-dom": "^18",
-    "tailwind-scrollbar": "^4.0.2"
+    "tailwind-scrollbar": "^4.0.2",
+    "zod": "^4.0.16"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

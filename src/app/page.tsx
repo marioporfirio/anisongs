@@ -10,6 +10,7 @@ import { motion } from 'framer-motion';
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
 import ThemeCard from "@/components/ThemeCard";
+import NetworkErrorFallback from "@/components/NetworkErrorFallback";
 
 // Tipagens
 interface Video { basename: string; link: string; }
@@ -27,6 +28,7 @@ function HomePageContent() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
+  const [retryFunction, setRetryFunction] = useState<(() => void) | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,7 +47,9 @@ function HomePageContent() {
   }, [supabase]);
 
   useEffect(() => {
-    async function fetchFilteredThemes() {
+    const controller = new AbortController();
+    
+    async function fetchFilteredThemes(retryCount = 0) {
       setIsLoading(true);
       setError(null);
       const year = searchParams.get('year');
@@ -67,25 +71,68 @@ function HomePageContent() {
         params.append('sort', '-created_at');
       }
       const API_URL = `${endpoint}?${params.toString()}`;
+      
       try {
-        const response = await fetch(API_URL);
-        if (!response.ok) { throw new Error(`A API respondeu com o status: ${response.status}`); }
+        const response = await fetch(API_URL, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          // Add timeout and retry-friendly options
+          cache: 'no-cache',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`A API respondeu com o status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
         if (year || season) {
-            const allThemes = (data.anime as Anime[]).flatMap(anime => anime.animethemes?.map(theme => ({...theme, anime: { name: anime.name, slug: anime.slug, images: anime.images }})) || []);
-            const finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
-            setThemes(finalThemes);
+          const allThemes = (data.anime as Anime[]).flatMap(anime => 
+            anime.animethemes?.map(theme => ({
+              ...theme, 
+              anime: { name: anime.name, slug: anime.slug, images: anime.images }
+            })) || []
+          );
+          const finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
+          setThemes(finalThemes);
         } else {
-            setThemes((data as ApiThemeResponse).animethemes || []);
+          setThemes((data as ApiThemeResponse).animethemes || []);
         }
       } catch (err) {
-        if (err instanceof Error) setError(err.message);
-        else setError("Ocorreu um erro desconhecido.");
+        if (err instanceof Error) {
+          if (err.name === 'AbortError') {
+            console.log('Request was aborted');
+            return;
+          }
+          
+          // Retry logic for network errors
+          if (retryCount < 3 && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Failed to fetch'))) {
+            console.log(`Retrying API call (attempt ${retryCount + 1})`);
+            setTimeout(() => fetchFilteredThemes(retryCount + 1), 2000 * (retryCount + 1));
+            return;
+          }
+          
+          console.error('API Error:', err);
+          setError(`A API externa está temporariamente indisponível. Tente novamente em alguns minutos.`);
+        } else {
+          setError("Ocorreu um erro desconhecido ao carregar os dados.");
+        }
       } finally {
         setIsLoading(false);
       }
     }
+    
+    // Set retry function for the error fallback
+    setRetryFunction(() => () => fetchFilteredThemes(0));
+    
     fetchFilteredThemes();
+    
+    return () => {
+      controller.abort();
+    };
   }, [searchParams]);
 
   const handleFilterChange = useCallback((filters: { year: string; season: string; type: string }) => {
@@ -123,7 +170,7 @@ function HomePageContent() {
       );
     }
     if (error) {
-      return <div className="text-center text-red-400 p-10 bg-red-900/20 rounded-lg">{error}</div>;
+      return <NetworkErrorFallback error={error} onRetry={retryFunction || undefined} />;
     }
     const validThemes = themes.filter(theme => !!theme.anime);
     if (validThemes.length === 0) {
