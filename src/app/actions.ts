@@ -1,11 +1,11 @@
-// src/app/actions.ts
 'use server'
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
-// Função auxiliar para criar o cliente Supabase nas Server Actions
+// Helper function to create Supabase client for Server Actions
 function createSupabaseClient() {
   const cookieStore = cookies();
 
@@ -23,7 +23,7 @@ function createSupabaseClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Ignorado, como recomendado na documentação do Supabase
+            // Ignored as recommended in Supabase docs
           }
         },
       },
@@ -31,31 +31,65 @@ function createSupabaseClient() {
   );
 }
 
-// Salva, atualiza ou remove uma avaliação de tema
+// Validation schemas
+const RatingSchema = z.object({
+  animeSlug: z.string().min(1, "Anime slug is required"),
+  themeSlug: z.string().min(1, "Theme slug is required"),
+  score: z.union([
+    z.string().transform(val => parseFloat(val)),
+    z.null(),
+    z.undefined()
+  ]).optional().transform(val => {
+    if (val === null || val === undefined) return null;
+    const parsed = typeof val === 'string' ? parseFloat(val) : val;
+    return isNaN(parsed) ? null : parsed;
+  }).refine(val => val === null || (val >= 0 && val <= 10), 
+    "Score must be between 0 and 10")
+});
+
+const PlaylistSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  description: z.string().max(500).optional(),
+  isPublic: z.boolean().default(false)
+});
+
+const PlaylistThemeSchema = z.object({
+  playlistId: z.string().min(1).transform(val => parseInt(val)),
+  themeId: z.string().min(1).transform(val => parseInt(val))
+});
+
+const PlaylistActionSchema = z.object({
+  playlistId: z.string().min(1).transform(val => parseInt(val))
+});
+
+const RemoveThemeSchema = z.object({
+  playlistId: z.string().min(1).transform(val => parseInt(val)),
+  playlistThemeId: z.string().min(1).transform(val => parseInt(val))
+});
+
+// Save, update or remove a theme rating
 export async function saveRating(formData: FormData) {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Error("Você precisa estar logado para avaliar.");
+    throw new Error("You must be logged in to rate.");
   }
 
-  const scoreStr = formData.get('score') as string;
-  const animeSlug = formData.get('animeSlug') as string;
-  const themeSlug = formData.get('themeSlug') as string;
+  const validatedData = RatingSchema.safeParse({
+    animeSlug: formData.get('animeSlug'),
+    themeSlug: formData.get('themeSlug'),
+    score: formData.get('score'),
+  });
 
-  if (!animeSlug || !themeSlug) { 
-    throw new Error("Dados insuficientes para salvar a avaliação.");
+  if (!validatedData.success) {
+    throw new Error(`Invalid data: ${validatedData.error.message}`);
   }
 
-  const scoreNum = scoreStr ? parseFloat(scoreStr) : null;
-  if (scoreStr && isNaN(scoreNum as number)) {
-    throw new Error("Valor de score inválido.");
-  }
+  const { animeSlug, themeSlug, score } = validatedData.data;
 
   try {
-    if (scoreNum === null) {
-      // Deleta a avaliação se a nota for nula
+    if (score === null) {
       const { error } = await supabase.from('ratings')
         .delete()
         .match({
@@ -63,40 +97,38 @@ export async function saveRating(formData: FormData) {
           anime_slug: animeSlug,
           theme_slug: themeSlug
         });
-      if (error) { throw error; }
-
+      if (error) throw error;
     } else {
-      // Cria ou atualiza a avaliação (upsert)
       const { error } = await supabase.from('ratings').upsert(
         { 
           user_id: user.id, 
           anime_slug: animeSlug, 
           theme_slug: themeSlug, 
-          score: scoreNum, 
+          score, 
         },
         {
-          onConflict: 'user_id, anime_slug, theme_slug' // Sintaxe correta para sua versão
+          onConflict: 'user_id, anime_slug, theme_slug'
         }
       );
-      if (error) { throw error; }
+      if (error) throw error;
     }
 
     revalidatePath(`/anime/${animeSlug}`);
 
   } catch (error) {
-    console.error("Erro ao processar a avaliação no Supabase:", error);
-    throw new Error("Não foi possível salvar sua avaliação. Verifique os logs do servidor.");
+    console.error("Error processing rating in Supabase:", error);
+    throw new Error("Could not save your rating. Check server logs.");
   }
 }
 
-// Interface para o resultado da função RPC
+// Interface for RPC function result
 interface ThemeRatingDetailsRpcResult {
   average_score: number | null;
   rating_count: number;
   user_score: number | null;
 }
 
-// Busca os detalhes da avaliação de um tema usando a função RPC otimizada
+// Get theme rating details using optimized RPC function
 export async function getThemeRatingDetails(animeSlug: string, themeSlug: string): Promise<{
   averageScore: number | null;
   ratingCount: number;
@@ -105,7 +137,6 @@ export async function getThemeRatingDetails(animeSlug: string, themeSlug: string
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Chama a função RPC
   const { data, error } = await supabase
     .rpc('get_theme_rating_details', {
       p_anime_slug: animeSlug,
@@ -115,117 +146,206 @@ export async function getThemeRatingDetails(animeSlug: string, themeSlug: string
     .single();
 
   if (error) {
-    console.error("Erro ao chamar a RPC get_theme_rating_details:", error);
+    console.error("Error calling RPC get_theme_rating_details:", error);
     return { averageScore: null, ratingCount: 0, userScore: null };
   }
   
-  // Usa asserção de tipo para informar ao TypeScript o formato dos dados
   const result = data as ThemeRatingDetailsRpcResult;
-
   const averageScore = result.average_score ? parseFloat(Number(result.average_score).toFixed(1)) : null;
 
   return {
-    averageScore: averageScore,
+    averageScore,
     ratingCount: result.rating_count || 0,
     userScore: result.user_score || null,
   };
 }
 
-
-// --- Funções de Playlist ---
+// --- Playlist Functions ---
 
 export async function getUserPlaylists() {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
-  const { data: playlists, error } = await supabase.from('playlists').select('id, name').eq('user_id', user.id).order('created_at', { ascending: false });
-  if (error) { console.error("Erro ao buscar playlists:", error); return []; }
+  
+  const { data: playlists, error } = await supabase
+    .from('playlists')
+    .select('id, name')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+    
+  if (error) { 
+    console.error("Error fetching playlists:", error); 
+    return []; 
+  }
+  
   return playlists;
 }
 
 export async function addThemeToPlaylist(formData: FormData) {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, message: "Usuário não autenticado." };
+  if (!user) return { success: false, message: "User not authenticated." };
 
-  const playlistId = formData.get('playlistId') as string;
-  const themeId = formData.get('themeId') as string;
-  if (!playlistId || !themeId) return { success: false, message: "Dados inválidos." };
+  const validatedData = PlaylistThemeSchema.safeParse({
+    playlistId: formData.get('playlistId'),
+    themeId: formData.get('themeId'),
+  });
 
-  const { data: playlist, error: ownerError } = await supabase.from('playlists').select('id').eq('user_id', user.id).eq('id', playlistId).maybeSingle();
-  if (ownerError || !playlist) return { success: false, message: "Playlist não encontrada ou não pertence a você." };
+  if (!validatedData.success) {
+    return { success: false, message: `Invalid data: ${validatedData.error.message}` };
+  }
 
-  const { data: existing, error: selectError } = await supabase.from('playlist_themes').select('id').eq('playlist_id', parseInt(playlistId)).eq('theme_id', parseInt(themeId)).maybeSingle();
-  if (selectError) { console.error("Erro ao verificar tema existente:", selectError); return { success: false, message: "Erro no servidor." }; }
-  if (existing) return { success: true, message: "Esta música já está na playlist." };
+  const { playlistId, themeId } = validatedData.data;
 
-  const { error } = await supabase.from('playlist_themes').insert({ playlist_id: parseInt(playlistId), theme_id: parseInt(themeId) });
-  if (error) { console.error("Erro ao adicionar tema:", error); return { success: false, message: "Não foi possível adicionar a música." }; }
+  const { data: playlist, error: ownerError } = await supabase
+    .from('playlists')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('id', playlistId)
+    .maybeSingle();
+
+  if (ownerError || !playlist) {
+    return { success: false, message: "Playlist not found or doesn't belong to you." };
+  }
+
+  const { data: existing, error: selectError } = await supabase
+    .from('playlist_themes')
+    .select('id')
+    .eq('playlist_id', playlistId)
+    .eq('theme_id', themeId)
+    .maybeSingle();
+
+  if (selectError) {
+    console.error("Error checking existing theme:", selectError);
+    return { success: false, message: "Server error." };
+  }
+
+  if (existing) {
+    return { success: true, message: "This song is already in the playlist." };
+  }
+
+  const { error } = await supabase
+    .from('playlist_themes')
+    .insert({ playlist_id: playlistId, theme_id: themeId });
+
+  if (error) {
+    console.error("Error adding theme:", error);
+    return { success: false, message: "Could not add the song." };
+  }
 
   revalidatePath(`/playlists/${playlistId}`);
-  return { success: true, message: "Música adicionada com sucesso!" };
+  return { success: true, message: "Song added successfully!" };
 }
 
 export async function createPlaylist(formData: FormData): Promise<void> {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { throw new Error("Usuário não autenticado."); }
+  if (!user) throw new Error("User not authenticated.");
 
-  const name = formData.get('name') as string;
-  const description = formData.get('description') as string;
-  const isPublic = formData.get('isPublic') === 'on';
-  if (!name) { throw new Error("O nome da playlist é obrigatório."); }
+  const validatedData = PlaylistSchema.safeParse({
+    name: formData.get('name'),
+    description: formData.get('description'),
+    isPublic: formData.get('isPublic') === 'on'
+  });
 
-  const { error } = await supabase.from('playlists').insert({ user_id: user.id, name: name, description: description, is_public: isPublic });
-  if (error) { console.error("Erro ao criar playlist:", error); throw new Error("Não foi possível criar a playlist."); }
+  if (!validatedData.success) {
+    throw new Error(`Invalid data: ${validatedData.error.message}`);
+  }
+
+  const { name, description, isPublic } = validatedData.data;
+
+  const { error } = await supabase.from('playlists').insert({ 
+    user_id: user.id, 
+    name, 
+    description, 
+    is_public: isPublic 
+  });
+
+  if (error) {
+    console.error("Error creating playlist:", error);
+    throw new Error("Could not create playlist.");
+  }
+
   revalidatePath('/playlists');
 }
 
 export async function deletePlaylist(formData: FormData) {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { return { success: false, message: "Usuário não autenticado." }; }
+  if (!user) return { success: false, message: "User not authenticated." };
 
-  const playlistId = formData.get('playlistId') as string;
-  if (!playlistId) { return { success: false, message: "ID da playlist inválido." }; }
+  const validatedData = PlaylistActionSchema.safeParse({
+    playlistId: formData.get('playlistId')
+  });
 
-  const { data: playlist, error: fetchError } = await supabase.from('playlists').select('user_id').eq('id', parseInt(playlistId)).single();
-  if (fetchError || !playlist || playlist.user_id !== user.id) {
-    return { success: false, message: "Não autorizado ou playlist não encontrada." };
+  if (!validatedData.success) {
+    return { success: false, message: `Invalid data: ${validatedData.error.message}` };
   }
 
-  const { error: deleteError } = await supabase.from('playlists').delete().eq('id', parseInt(playlistId));
+  const { playlistId } = validatedData.data;
+
+  const { data: playlist, error: fetchError } = await supabase
+    .from('playlists')
+    .select('user_id')
+    .eq('id', playlistId)
+    .single();
+
+  if (fetchError || !playlist || playlist.user_id !== user.id) {
+    return { success: false, message: "Not authorized or playlist not found." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from('playlists')
+    .delete()
+    .eq('id', playlistId);
+
   if (deleteError) {
-    console.error("Erro ao deletar playlist:", deleteError);
-    return { success: false, message: "Não foi possível deletar a playlist." };
+    console.error("Error deleting playlist:", deleteError);
+    return { success: false, message: "Could not delete playlist." };
   }
 
   revalidatePath('/playlists');
-  return { success: true, message: "Playlist deletada com sucesso!" };
+  return { success: true, message: "Playlist deleted successfully!" };
 }
 
 export async function removeThemeFromPlaylist(formData: FormData) {
   const supabase = createSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { return { success: false, message: "Usuário não autenticado." }; }
+  if (!user) return { success: false, message: "User not authenticated." };
 
-  const playlistId = formData.get('playlistId') as string;
-  const playlistThemeId = formData.get('playlistThemeId') as string;
-  if (!playlistId || !playlistThemeId) { return { success: false, message: "Dados inválidos." }; }
+  const validatedData = RemoveThemeSchema.safeParse({
+    playlistId: formData.get('playlistId'),
+    playlistThemeId: formData.get('playlistThemeId')
+  });
+
+  if (!validatedData.success) {
+    return { success: false, message: `Invalid data: ${validatedData.error.message}` };
+  }
+
+  const { playlistId, playlistThemeId } = validatedData.data;
   
-  const { data: playlist } = await supabase.from('playlists').select('user_id').eq('id', parseInt(playlistId)).single();
+  const { data: playlist } = await supabase
+    .from('playlists')
+    .select('user_id')
+    .eq('id', playlistId)
+    .single();
+
   if (!playlist || playlist.user_id !== user.id) {
-    return { success: false, message: "Não autorizado." };
+    return { success: false, message: "Not authorized." };
   }
   
-  const { error } = await supabase.from('playlist_themes').delete().eq('id', parseInt(playlistThemeId));
+  const { error } = await supabase
+    .from('playlist_themes')
+    .delete()
+    .eq('id', playlistThemeId);
+
   if (error) {
-    console.error("Erro ao remover tema:", error);
-    return { success: false, message: "Não foi possível remover a música." };
+    console.error("Error removing theme:", error);
+    return { success: false, message: "Could not remove the song." };
   }
 
   revalidatePath(`/playlists/${playlistId}`);
-  return { success: true, message: "Música removida com sucesso!" };
+  return { success: true, message: "Song removed successfully!" };
 }
 
 export interface PlaylistThemeItemData {
@@ -252,14 +372,14 @@ export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDe
     .single();
 
   if (playlistError || !playlistData) {
-    console.error(`Erro ao buscar metadados da playlist ${playlistId}:`, playlistError);
+    console.error(`Error fetching playlist metadata ${playlistId}:`, playlistError);
     return null;
   }
 
   if (!playlistData.is_public) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || playlistData.user_id !== user.id) {
-      console.warn(`Acesso negado à playlist privada ${playlistId}.`);
+      console.warn(`Access denied to private playlist ${playlistId}.`);
       return null;
     }
   }
@@ -271,7 +391,7 @@ export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDe
     .order('created_at', { ascending: true });
 
   if (themesError) {
-    console.error(`Erro ao buscar temas da playlist ${playlistId}:`, themesError);
+    console.error(`Error fetching playlist themes ${playlistId}:`, themesError);
     return { ...playlistData, themes: [] };
   }
 

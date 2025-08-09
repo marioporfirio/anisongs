@@ -19,6 +19,20 @@ const nextConfig = {
       // Se no futuro aparecerem imagens de outros domínios, é só adicionar aqui
     ],
   },
+  webpack: (config, { dev, isServer }) => {
+    // Suppress Supabase realtime warnings in development
+    if (dev && !isServer) {
+      config.ignoreWarnings = [
+        { module: /node_modules\/@supabase\/realtime-js/ },
+        /Critical dependency: the request of a dependency is an expression/,
+      ];
+    }
+    return config;
+  },
+  // Improve development experience
+  experimental: {
+    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
+  },
 };
 
 export default nextConfig;

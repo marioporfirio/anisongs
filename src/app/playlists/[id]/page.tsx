@@ -35,9 +35,6 @@ async function fetchThemeDetailsFromApiMoe(themeId: number): Promise<AnimeThemeM
     const response = await fetch(`https://api.animethemes.moe/animetheme/${themeId}?include=song,anime,animethemeentries.videos`);
     if (!response.ok) {
       console.error(`Failed to fetch theme ${themeId} from animethemes.moe: ${response.status} ${response.statusText}`);
-      // Attempt to get error body for more details
-      // const errorBody = await response.text();
-      // console.error("Error body:", errorBody);
       return null;
     }
     const data = await response.json();
@@ -48,6 +45,8 @@ async function fetchThemeDetailsFromApiMoe(themeId: number): Promise<AnimeThemeM
   }
 }
 
+
+
 export default async function PlaylistDetailPage({ params }: { params: { id: string } }) {
   const playlistIdNum = parseInt(params.id, 10);
   if (isNaN(playlistIdNum)) {
@@ -55,7 +54,7 @@ export default async function PlaylistDetailPage({ params }: { params: { id: str
   }
 
   // Supabase client for user session (used by getPlaylistDetails for private playlist check)
-  const cookieStore = await cookies(); // Added await
+  const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -97,12 +96,26 @@ export default async function PlaylistDetailPage({ params }: { params: { id: str
             videoLink: undefined, // Ensure all fields of EnrichedPlaylistTheme are present
         };
       }
+      // Log the API response for debugging
+      console.log('🎵 API Response for theme', item.theme_id, ':', themeDetailsApi);
+      
+      // Extract video link more safely
+      let videoLink: string | undefined;
+      if (themeDetailsApi.animethemeentries && themeDetailsApi.animethemeentries.length > 0) {
+        const entry = themeDetailsApi.animethemeentries[0];
+        if (entry.videos && entry.videos.length > 0) {
+          videoLink = entry.videos[0].link;
+        }
+      }
+      
+      console.log('🎵 Extracted video link:', videoLink);
+      
       return {
         ...item, // playlist_theme_id, theme_id (from PlaylistThemeItemData)
         title: themeDetailsApi.song?.title || 'Título Desconhecido',
         animeName: themeDetailsApi.anime?.name || 'Anime Desconhecido',
         animeSlug: themeDetailsApi.anime?.slug || '#',
-        videoLink: themeDetailsApi.animethemeentries[0]?.videos[0]?.link,
+        videoLink: videoLink,
         type: themeDetailsApi.slug || 'N/A', // 'slug' from animetheme is like 'OP1'
       };
     })

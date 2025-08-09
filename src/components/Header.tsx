@@ -54,7 +54,13 @@ export default async function Header() {
             AniSongs
           </Link>
           {user && (
-             <Link href="/playlists" className="text-sm text-gray-300 hover:text-white transition-colors duration-300">
+            <Link 
+              href="/playlists" 
+              className="py-2 px-4 rounded-md text-sm font-bold bg-indigo-600/80 hover:bg-indigo-600/100 text-white transition-all duration-300 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                 <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+               </svg>
               Minhas Playlists
             </Link>
           )}

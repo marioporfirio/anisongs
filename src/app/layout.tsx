@@ -5,6 +5,7 @@ import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
 import Header from "@/components/Header";
 import PageWrapper from "@/components/PageWrapper"; // Importa o wrapper
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const geistSans = GeistSans;
 const geistMono = GeistMono;
@@ -24,8 +25,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Header />
-        <PageWrapper>{children}</PageWrapper> 
+        <ErrorBoundary>
+          <Header />
+          <PageWrapper>{children}</PageWrapper>
+        </ErrorBoundary>
       </body>
     </html>
   );

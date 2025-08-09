@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import AddToPlaylistButton from './AddToPlaylistButton';
+import { memo } from 'react';
 
 interface Artist {
   id: number;
@@ -23,7 +24,7 @@ interface ThemeCardProps {
   onPlayVideo: (videoUrl: string) => void;
 }
 
-export default function ThemeCard({
+const ThemeCard = memo(function ThemeCard({
   animeName,
   animeSlug,
   themeId,
@@ -43,16 +44,24 @@ export default function ThemeCard({
   return (
     <motion.div
       variants={cardVariants}
-      className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg overflow-hidden shadow-lg h-full flex flex-col group transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl"
+      className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg h-full flex flex-col group transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl"
     >
       <Link href={`/anime/${animeSlug}`} className="relative w-full h-40 overflow-hidden bg-black flex-shrink-0 block">
         <div 
+          role="button"
+          tabIndex={0}
           className="relative w-full h-full"
           onClick={(e) => {
             if (videoUrl) {
-              e.preventDefault(); // Prevent Link navigation
-              e.stopPropagation(); // Stop event from bubbling up to the Link
+              e.preventDefault();
+              e.stopPropagation();
               onPlayVideo(videoUrl);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              if (videoUrl) onPlayVideo(videoUrl);
             }
           }}
         >
@@ -104,4 +113,6 @@ export default function ThemeCard({
       </div>
     </motion.div>
   );
-}
+});
+
+export default ThemeCard;

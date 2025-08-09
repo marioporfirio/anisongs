@@ -26,7 +26,8 @@ export default function GlobalSearch() {
   useOnClickOutside(searchContainerRef, () => setIsDropdownOpen(false));
 
   useEffect(() => {
-    if (debouncedQuery.length < 3) {
+    // Early return if query is empty or too short
+    if (!debouncedQuery || debouncedQuery.trim() === '' || debouncedQuery.length < 3) {
       setResults({});
       setIsDropdownOpen(false);
       return;

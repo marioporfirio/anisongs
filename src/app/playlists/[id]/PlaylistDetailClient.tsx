@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'; // Import useRouter
 import { type ClientPlaylistDetails, type EnrichedPlaylistTheme } from './page'; // Use updated types from page.tsx
 import { removeThemeFromPlaylist } from '@/app/actions';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
+import AudioPlayer from '@/components/AudioPlayer';
 
 interface PlaylistDetailClientProps {
   playlist: ClientPlaylistDetails;
@@ -62,6 +63,11 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
 
   return (
     <>
+      {/* Audio Player */}
+      <div className="mb-6">
+        <AudioPlayer themes={playlist.themes} />
+      </div>
+      
       <div className="space-y-4">
         {playlist.themes.map((themeItem: EnrichedPlaylistTheme) => (
           <div key={themeItem.playlist_theme_id} className="bg-slate-800/50 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 hover:border-indigo-500/50 hover:shadow-indigo-500/20 hover:shadow-2xl">

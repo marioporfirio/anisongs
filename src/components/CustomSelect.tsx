@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef } from 'react';
@@ -32,20 +31,26 @@ export default function CustomSelect({ options, value, onChange, placeholder }: 
 
   return (
     <div className="relative w-full md:w-auto" ref={ref}>
+      <span id="select-label" className="sr-only">{placeholder}</span>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-labelledby="select-label"
         className="bg-gray-800 text-white rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-indigo-500 transition-all duration-200 flex items-center justify-between w-full md:w-36"
       >
         <span className={selectedOption ? 'text-white' : 'text-gray-400'}>
           {selectedOption ? selectedOption.label : placeholder}
         </span>
-        <svg className={`w-5 h-5 ml-2 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+        <svg className={`w-5 h-5 ml-2 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.ul
+            role="listbox"
+            aria-labelledby="select-label"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -55,6 +60,8 @@ export default function CustomSelect({ options, value, onChange, placeholder }: 
             {options.map((option) => (
               <li
                 key={option.value}
+                role="option"
+                aria-selected={option.value === value}
                 onClick={() => handleSelect(option.value)}
                 className="px-4 py-2 text-sm text-white hover:bg-indigo-600 cursor-pointer"
               >
