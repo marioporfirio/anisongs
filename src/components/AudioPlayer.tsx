@@ -68,7 +68,6 @@ export default function AudioPlayer({ themes }: AudioPlayerProps) {
   }, [playableThemes, demoThemes, orderedThemes]);
   
   // Initialize ordered themes when themes change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const baseThemes = playableThemes.length > 0 ? playableThemes : demoThemes;
     if (baseThemes.length > 0 && orderedThemes.length === 0) {
@@ -108,7 +107,7 @@ export default function AudioPlayer({ themes }: AudioPlayerProps) {
         audio.load();
       }
     }
-  }, [finalThemes, finalThemes.length]);
+  }, [finalThemes]);
 
   // Garantir que o currentTrackIndex seja válido quando finalThemes mudar
   useEffect(() => {
@@ -117,11 +116,13 @@ export default function AudioPlayer({ themes }: AudioPlayerProps) {
     } else if (currentTrackIndex >= finalThemes.length) {
       setCurrentTrackIndex(Math.max(0, finalThemes.length - 1));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalThemes.length]);
 
   // Resetar histórico quando shuffle é ativado/desativado ou playlist muda
   useEffect(() => {
     setPlayedTracks(new Set());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isShuffle, finalThemes.length]);
 
   const getCurrentTrack = useCallback(() => {

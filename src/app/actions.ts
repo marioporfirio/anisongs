@@ -89,6 +89,30 @@ export async function saveRating(formData: FormData) {
   const { animeSlug, themeSlug, score } = validatedData.data;
 
   try {
+    // Buscar IDs da API AnimeThemes para salvar junto com os slugs
+    let animeId = null;
+    let themeId = null;
+    
+    if (score !== null) {
+      try {
+        const API_URL = `https://api.animethemes.moe/anime/${animeSlug}?include=animethemes`;
+        const response = await fetch(API_URL);
+        
+        if (response.ok) {
+          const data = await response.json();
+          animeId = data.anime?.id;
+          const theme = data.anime?.animethemes?.find((t: { id: number; slug: string }) => t.slug === themeSlug);
+          themeId = theme?.id;
+          
+          console.log(`📝 Salvando avaliação com IDs: anime_id=${animeId}, theme_id=${themeId}`);
+        } else {
+          console.warn(`⚠️ Não foi possível buscar IDs da API para ${animeSlug}-${themeSlug}`);
+        }
+      } catch (apiError) {
+        console.warn('Erro ao buscar IDs da API:', apiError);
+      }
+    }
+
     if (score === null) {
       const { error } = await supabase.from('ratings')
         .delete()
@@ -103,7 +127,9 @@ export async function saveRating(formData: FormData) {
         { 
           user_id: user.id, 
           anime_slug: animeSlug, 
-          theme_slug: themeSlug, 
+          theme_slug: themeSlug,
+          anime_id: animeId,
+          theme_id: themeId,
           score, 
         },
         {
@@ -362,6 +388,29 @@ export interface PlaylistDetails {
   user_id: string;
 }
 
+// Get top rated themes by type
+export async function getTopRatedThemes(type: 'OP' | 'ED' | 'IN', limit: number = 100): Promise<{
+  anime_slug: string;
+  theme_slug: string;
+  average_score: number;
+  rating_count: number;
+}[]> {
+  const supabase = createSupabaseClient();
+  
+  const { data, error } = await supabase
+    .rpc('get_top_rated_themes_by_type', {
+      p_theme_type: type,
+      p_limit: limit
+    });
+
+  if (error) {
+    console.error('Error fetching top rated themes:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
 export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDetails | null> {
   const supabase = createSupabaseClient();
 
@@ -378,9 +427,28 @@ export async function getPlaylistDetails(playlistId: number): Promise<PlaylistDe
 
   if (!playlistData.is_public) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || playlistData.user_id !== user.id) {
-      console.warn(`Access denied to private playlist ${playlistId}.`);
+    if (!user) {
+      console.warn(`Access denied to private playlist ${playlistId} - user not authenticated.`);
       return null;
+    }
+    
+    // Check if user is owner OR collaborator
+    const isOwner = playlistData.user_id === user.id;
+    
+    if (!isOwner) {
+      // Check if user is an accepted collaborator
+      const { data: collaboration } = await supabase
+        .from('playlist_collaborators')
+        .select('status')
+        .eq('playlist_id', playlistId)
+        .eq('user_id', user.id)
+        .eq('status', 'accepted')
+        .single();
+        
+      if (!collaboration) {
+        console.warn(`Access denied to private playlist ${playlistId} - user is not owner or collaborator.`);
+        return null;
+      }
     }
   }
   

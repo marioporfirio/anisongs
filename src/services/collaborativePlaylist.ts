@@ -1,5 +1,5 @@
 // src/services/collaborativePlaylist.ts
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface PlaylistCollaborator {
   id: string;
@@ -46,7 +46,7 @@ class CollaborativePlaylistService {
   private sessionHeartbeat?: NodeJS.Timeout;
 
   constructor() {
-    this.supabase = createClient(
+    this.supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
@@ -64,27 +64,65 @@ class CollaborativePlaylistService {
         return { success: false, error: 'Not authenticated' };
       }
 
-      // Check if user exists
-      const { data: invitedUser, error: userError } = await this.supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', userEmail)
-        .single();
-
-      if (userError || !invitedUser) {
-        return { success: false, error: 'User not found' };
+      // Check if user exists - simplified approach
+      let invitedUserId: string | null = null;
+      
+      try {
+        // Try profiles table first (most likely to have email)
+        const { data: profileUser, error: profileError } = await this.supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', userEmail)
+          .single();
+        
+        if (!profileError && profileUser) {
+          invitedUserId = profileUser.id;
+        } else {
+          // If profiles doesn't work, the user might not be registered yet
+          // For now, we'll show a more helpful error message
+          console.log('User not found in profiles table:', profileError);
+          return { 
+            success: false, 
+            error: 'Usuário não encontrado. Verifique se o email está correto e se o usuário já se cadastrou no sistema.' 
+          };
+        }
+      } catch (error) {
+        console.error('Error searching for user:', error);
+        return { success: false, error: 'Erro ao buscar usuário' };
       }
 
       // Check if already invited
       const { data: existing } = await this.supabase
         .from('playlist_collaborators')
-        .select('id')
+        .select('id, status')
         .eq('playlist_id', playlistId)
-        .eq('user_id', invitedUser.id)
+        .eq('user_id', invitedUserId)
         .single();
 
       if (existing) {
-        return { success: false, error: 'User already invited' };
+        if (existing.status === 'pending') {
+          return { success: false, error: 'Usuário já foi convidado e o convite está pendente' };
+        } else if (existing.status === 'accepted') {
+          return { success: false, error: 'Usuário já é colaborador desta playlist' };
+        } else if (existing.status === 'declined') {
+          // Se foi recusado, permitir novo convite atualizando o existente
+          const { error: updateError } = await this.supabase
+            .from('playlist_collaborators')
+            .update({
+              status: 'pending',
+              role: role,
+              invited_at: new Date().toISOString(),
+              accepted_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+            
+          if (updateError) {
+            return { success: false, error: 'Erro ao reenviar convite' };
+          }
+          
+          return { success: true };
+        }
       }
 
       // Create invitation
@@ -92,7 +130,7 @@ class CollaborativePlaylistService {
         .from('playlist_collaborators')
         .insert({
           playlist_id: playlistId,
-          user_id: invitedUser.id,
+          user_id: invitedUserId,
           role,
           invited_by: currentUser.user.id,
           status: 'pending'
@@ -141,12 +179,17 @@ class CollaborativePlaylistService {
         .from('playlist_collaborators')
         .select(`
           *,
-          profiles:user_id(username, email),
-          invited_by_profile:invited_by(username)
+          profiles!user_id(username, email),
+          invited_by_profile!invited_by(username)
         `)
         .eq('playlist_id', playlistId);
 
       if (error) {
+        // Se a tabela não existir, retornar array vazio em vez de erro
+        if (error.code === 'PGRST116' || error.message.includes('does not exist')) {
+          console.warn('Tabela playlist_collaborators não existe ainda. Execute o SQL de criação.');
+          return [];
+        }
         console.error('Error fetching collaborators:', error);
         return [];
       }
@@ -192,13 +235,18 @@ class CollaborativePlaylistService {
         .from('playlist_changes')
         .select(`
           *,
-          profiles:user_id(username)
+          profiles!user_id(username)
         `)
         .eq('playlist_id', playlistId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
+        // Se a tabela não existir, retornar array vazio em vez de erro
+        if (error.code === 'PGRST116' || error.message.includes('does not exist')) {
+          console.warn('Tabela playlist_changes não existe ainda. Execute o SQL de criação.');
+          return [];
+        }
         console.error('Error fetching changes:', error);
         return [];
       }
@@ -276,7 +324,11 @@ class CollaborativePlaylistService {
             // Track user presence
             await presenceSubscription.track({
               user_id: currentUser.user.id,
-              username: currentUser.user.user_metadata?.username || 'Anonymous',
+              username: currentUser.user.user_metadata?.display_name || 
+                       currentUser.user.user_metadata?.username || 
+                       currentUser.user.user_metadata?.name || 
+                       currentUser.user.email?.split('@')[0] || 
+                       'Usuário',
               last_seen: new Date().toISOString()
             });
           }
@@ -292,7 +344,11 @@ class CollaborativePlaylistService {
       this.sessionHeartbeat = setInterval(async () => {
         await presenceSubscription.track({
           user_id: currentUser.user.id,
-          username: currentUser.user.user_metadata?.username || 'Anonymous',
+          username: currentUser.user.user_metadata?.display_name || 
+                   currentUser.user.user_metadata?.username || 
+                   currentUser.user.user_metadata?.name || 
+                   currentUser.user.email?.split('@')[0] || 
+                   'Usuário',
           last_seen: new Date().toISOString()
         });
       }, 30000); // Update every 30 seconds
@@ -317,7 +373,7 @@ class CollaborativePlaylistService {
       this.sessionHeartbeat = undefined;
     }
 
-    console.log('🤝 Collaborative session stopped for playlist:', playlistId);
+    // Collaborative session stopped
   }
 
   // Handle real-time changes
