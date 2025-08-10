@@ -22,6 +22,7 @@ interface ThemeCardProps {
   isLoggedIn: boolean;
   videoUrl?: string;
   onPlayVideo: (videoUrl: string) => void;
+  averageRating?: number;
 }
 
 const ThemeCard = memo(function ThemeCard({
@@ -35,6 +36,7 @@ const ThemeCard = memo(function ThemeCard({
   isLoggedIn,
   videoUrl,
   onPlayVideo,
+  averageRating
 }: ThemeCardProps) {
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -73,6 +75,13 @@ const ThemeCard = memo(function ThemeCard({
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+          
+          {/* Rating Badge */}
+          {averageRating && (
+            <div className="absolute top-2 right-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-10">
+              ⭐ {averageRating.toFixed(1)}
+            </div>
+          )}
         </div>
       </Link>
       <div className="p-4 flex-grow flex flex-col justify-between">
@@ -106,6 +115,7 @@ const ThemeCard = memo(function ThemeCard({
           <p className="text-xs text-indigo-400 font-semibold mt-1">
             {themeSlug.toUpperCase()}
           </p>
+
         </div>
         <div className="flex justify-end mt-3">
           {isLoggedIn && <AddToPlaylistButton themeId={themeId} />}

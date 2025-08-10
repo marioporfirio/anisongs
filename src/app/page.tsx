@@ -11,6 +11,7 @@ import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
 import ThemeCard from "@/components/ThemeCard";
 import NetworkErrorFallback from "@/components/NetworkErrorFallback";
+import { getThemeRatingDetailsClient } from "@/services/ratings";
 
 // Tipagens
 interface Video { basename: string; link: string; }
@@ -29,6 +30,7 @@ function HomePageContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
   const [retryFunction, setRetryFunction] = useState<(() => void) | null>(null);
+  const [themeRatings, setThemeRatings] = useState<Map<string, { averageScore: number; ratingCount: number }>>(new Map());
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,6 +39,37 @@ function HomePageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Função para buscar ratings dos temas
+  const fetchThemeRatings = async (themesToRate: AnimeTheme[]) => {
+    const ratingsMap = new Map<string, { averageScore: number; ratingCount: number }>();
+    
+    // Buscar ratings em lotes para melhor performance
+    const batchSize = 10;
+    for (let i = 0; i < themesToRate.length; i += batchSize) {
+      const batch = themesToRate.slice(i, i + batchSize);
+      
+      const ratingPromises = batch.map(async (theme) => {
+        if (theme.anime) {
+          try {
+            const ratingDetails = await getThemeRatingDetailsClient(theme.anime.slug, theme.slug);
+            if (ratingDetails.averageScore !== null && ratingDetails.ratingCount > 0) {
+              ratingsMap.set(`${theme.anime.slug}-${theme.slug}`, {
+                averageScore: ratingDetails.averageScore,
+                ratingCount: ratingDetails.ratingCount
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching rating for ${theme.anime.slug}-${theme.slug}:`, error);
+          }
+        }
+      });
+      
+      await Promise.all(ratingPromises);
+    }
+    
+    setThemeRatings(ratingsMap);
+  };
 
   useEffect(() => {
     const getSession = async () => {
@@ -73,6 +106,7 @@ function HomePageContent() {
       const API_URL = `${endpoint}?${params.toString()}`;
       
       try {
+        console.log('🌐 Fazendo requisição para:', API_URL);
         const response = await fetch(API_URL, {
           signal: controller.signal,
           headers: {
@@ -82,13 +116,16 @@ function HomePageContent() {
           // Add timeout and retry-friendly options
           cache: 'no-cache',
         });
+        console.log('📡 Resposta da API:', response.status, response.statusText);
         
         if (!response.ok) {
-          throw new Error(`A API respondeu com o status: ${response.status}`);
+          console.error('❌ Erro na API AnimeThemes:', response.status, response.statusText);
+          throw new Error(`A API AnimeThemes respondeu com o status: ${response.status}`);
         }
         
         const data = await response.json();
         
+        let finalThemes: AnimeTheme[];
         if (year || season) {
           const allThemes = (data.anime as Anime[]).flatMap(anime => 
             anime.animethemes?.map(theme => ({
@@ -96,27 +133,38 @@ function HomePageContent() {
               anime: { name: anime.name, slug: anime.slug, images: anime.images }
             })) || []
           );
-          const finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
+          finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
           setThemes(finalThemes);
         } else {
-          setThemes((data as ApiThemeResponse).animethemes || []);
+          finalThemes = (data as ApiThemeResponse).animethemes || [];
+          setThemes(finalThemes);
         }
+        
+        // Buscar ratings para os temas carregados
+        fetchThemeRatings(finalThemes);
       } catch (err) {
+        console.error('🚨 Erro completo:', err);
         if (err instanceof Error) {
           if (err.name === 'AbortError') {
             console.log('Request was aborted');
             return;
           }
           
+          console.error('📋 Detalhes do erro:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+          });
+          
           // Retry logic for network errors
           if (retryCount < 3 && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Failed to fetch'))) {
-            console.log(`Retrying API call (attempt ${retryCount + 1})`);
-            setTimeout(() => fetchFilteredThemes(retryCount + 1), 2000 * (retryCount + 1));
+            console.log(`🔄 Tentando novamente... Tentativa ${retryCount + 1}`);
+            setTimeout(() => fetchFilteredThemes(retryCount + 1), 1000 * (retryCount + 1));
             return;
           }
           
           console.error('API Error:', err);
-          setError(`A API externa está temporariamente indisponível. Tente novamente em alguns minutos.`);
+          setError(`A API AnimeThemes está temporariamente indisponível. Erro: ${err.message}`);
         } else {
           setError("Ocorreu um erro desconhecido ao carregar os dados.");
         }
@@ -186,6 +234,8 @@ function HomePageContent() {
           const posterImage = theme.anime!.images.find(img => img.facet === 'poster') ||
                               theme.anime!.images.find(img => img.facet === 'Large Cover') ||
                               theme.anime!.images.find(img => img.facet === 'Small Cover');
+          const ratingKey = `${theme.anime!.slug}-${theme.slug}`;
+          const rating = themeRatings.get(ratingKey);
           return (
             <ThemeCard
               key={`${theme.anime!.slug}-${theme.slug}-${theme.id}`}
@@ -199,6 +249,7 @@ function HomePageContent() {
               isLoggedIn={!!session}
               videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
               onPlayVideo={setVideoForModal}
+              averageRating={rating?.averageScore}
             />
           );
         })}

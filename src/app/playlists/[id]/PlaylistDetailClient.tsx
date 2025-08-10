@@ -8,6 +8,7 @@ import { type ClientPlaylistDetails, type EnrichedPlaylistTheme } from './page';
 import { removeThemeFromPlaylist } from '@/app/actions';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
 import AudioPlayer from '@/components/AudioPlayer';
+import PlaylistCollaboration from '@/components/PlaylistCollaboration';
 
 interface PlaylistDetailClientProps {
   playlist: ClientPlaylistDetails;
@@ -110,6 +111,15 @@ export default function PlaylistDetailClient({ playlist, isOwner }: PlaylistDeta
           </div>
         ))}
       </div>
+      
+      {/* Componente de Colaboração */}
+      <div className="mt-8">
+        <PlaylistCollaboration 
+          playlistId={playlist.id}
+          isOwner={isOwner}
+        />
+      </div>
+      
       <VideoPlayerModal videoUrl={selectedVideoUrl} onClose={handleCloseModal} />
     </>
   );

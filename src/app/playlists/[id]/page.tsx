@@ -96,9 +96,6 @@ export default async function PlaylistDetailPage({ params }: { params: { id: str
             videoLink: undefined, // Ensure all fields of EnrichedPlaylistTheme are present
         };
       }
-      // Log the API response for debugging
-      console.log('🎵 API Response for theme', item.theme_id, ':', themeDetailsApi);
-      
       // Extract video link more safely
       let videoLink: string | undefined;
       if (themeDetailsApi.animethemeentries && themeDetailsApi.animethemeentries.length > 0) {
@@ -107,8 +104,6 @@ export default async function PlaylistDetailPage({ params }: { params: { id: str
           videoLink = entry.videos[0].link;
         }
       }
-      
-      console.log('🎵 Extracted video link:', videoLink);
       
       return {
         ...item, // playlist_theme_id, theme_id (from PlaylistThemeItemData)
