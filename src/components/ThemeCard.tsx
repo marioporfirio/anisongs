@@ -23,8 +23,9 @@ interface ThemeCardProps {
   isLoggedIn: boolean;
   videoUrl?: string;
   onPlayVideo: (videoUrl: string) => void;
-  averageRating?: number;
+  averageRating?: number | null;
   showRatingControls?: boolean;
+  isLoadingRating?: boolean;
 }
 
 const ThemeCard = memo(function ThemeCard({
@@ -39,7 +40,8 @@ const ThemeCard = memo(function ThemeCard({
   videoUrl,
   onPlayVideo,
   averageRating,
-  showRatingControls = true
+  showRatingControls = true,
+  isLoadingRating = false
 }: ThemeCardProps) {
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -127,12 +129,19 @@ const ThemeCard = memo(function ThemeCard({
             {/* Sistema de Avaliação */}
             {showRatingControls && (
               <div className="flex-1">
-                <RatingStars 
-                animeSlug={animeSlug}
-                themeSlug={themeSlug}
-                isLoggedIn={isLoggedIn}
-                displayMode="dropdown"
-              />
+                {isLoadingRating ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-12 h-6 bg-slate-700 rounded animate-pulse"></div>
+                    <span className="text-xs text-slate-400">Carregando...</span>
+                  </div>
+                ) : (
+                  <RatingStars 
+                    animeSlug={animeSlug}
+                    themeSlug={themeSlug}
+                    isLoggedIn={isLoggedIn}
+                    displayMode="dropdown"
+                  />
+                )}
               </div>
             )}
             

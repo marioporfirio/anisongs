@@ -8,6 +8,7 @@ import ThemeCardSkeleton from '@/components/ThemeCardSkeleton';
 import CustomSelect from '@/components/CustomSelect';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
 import { getTopRatedThemesClient } from '@/services/ratings';
+import { fetchAnimeThemesApi, createCacheKey, apiCache } from '@/services/cache';
 
 // Usar as mesmas interfaces da página principal
 interface Video { basename: string; link: string; }
@@ -117,80 +118,80 @@ export default function Top100Page() {
        }
       
       // Buscar detalhes dos temas da API AnimeThemes
-        const themeDetailsPromises = topRatedThemes.map(async (ratedTheme, index) => {
-          try {
-            // Usar endpoint confiável com ID quando disponível
-              let apiUrl: string;
-              if (ratedTheme.anime_id) {
-                // Usar endpoint confiável por ID (igual página principal)
-                apiUrl = `https://api.animethemes.moe/anime/${ratedTheme.anime_id}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
-              } else {
-                // Fallback para endpoint por slug (dados antigos)
-                apiUrl = `https://api.animethemes.moe/anime/${ratedTheme.anime_slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
+        // Processar em lotes otimizados
+        const BATCH_SIZE = 50;
+        const allThemes: TopTheme[] = [];
+        
+        for (let i = 0; i < topRatedThemes.length; i += BATCH_SIZE) {
+          const batch = topRatedThemes.slice(i, i + BATCH_SIZE);
+          
+          const batchPromises = batch.map(async (ratedTheme, index) => {
+            try {
+              // Verificar cache primeiro
+              const cacheKey = createCacheKey('anime', ratedTheme.anime_id || ratedTheme.anime_slug);
+              let data = apiCache.getAnimeData(ratedTheme.anime_slug);
+              
+              if (!data) {
+                // Usar endpoint confiável com ID quando disponível
+                let endpoint: string;
+                if (ratedTheme.anime_id) {
+                  endpoint = `https://api.animethemes.moe/anime/${ratedTheme.anime_id}`;
+                } else {
+                  endpoint = `https://api.animethemes.moe/anime/${ratedTheme.anime_slug}`;
+                }
+                
+                const params = new URLSearchParams({
+                  include: 'images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos'
+                });
+                
+                try {
+                  data = await fetchAnimeThemesApi(endpoint, params, cacheKey);
+                  // Salvar no cache específico de anime
+                  apiCache.setAnimeData(ratedTheme.anime_slug, data);
+                } catch {
+                  return createThemeFromDatabase(ratedTheme, i + index);
+                }
               }
-            
-            const response = await fetch(apiUrl, {
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-              },
-              cache: 'no-cache',
-            });
-            
-            if (!response.ok) {
-             // Usar dados do banco quando API falha
-             return createThemeFromDatabase(ratedTheme, index);
-           }
-           
-           const data = await response.json();
-           const anime = data.anime;
-           
-           if (!anime || !anime.animethemes) {
-              console.warn(`⚠️ Dados incompletos na API (sem anime ou temas):`, ratedTheme.anime_slug);
-              // Usar dados do banco quando API não tem dados completos
-              return createThemeFromDatabase(ratedTheme, index);
+              const anime = (data as { anime: Anime }).anime;
+              
+              if (!anime || !anime.animethemes) {
+                console.warn(`⚠️ Dados incompletos na API (sem anime ou temas):`, ratedTheme.anime_slug);
+                return createThemeFromDatabase(ratedTheme, i + index);
+              }
+              
+              // Encontrar o tema específico dentro do anime
+              let theme;
+              if (ratedTheme.theme_id) {
+                theme = anime.animethemes.find((t: AnimeTheme) => t.id === ratedTheme.theme_id);
+              } else {
+                theme = anime.animethemes.find((t: AnimeTheme) => t.slug === ratedTheme.theme_slug);
+              }
+              
+              if (!theme || !theme.song) {
+                console.warn(`⚠️ Tema específico não encontrado:`, ratedTheme.theme_slug);
+                return createThemeFromDatabase(ratedTheme, i + index);
+              }
+              
+              // Adicionar dados do anime ao tema
+              theme.anime = anime;
+              
+              return {
+                ...theme,
+                average_score: ratedTheme.average_score,
+                rating_count: ratedTheme.rating_count,
+              } as TopTheme;
+            } catch (error) {
+              console.error(`❌ Erro ao buscar tema ${ratedTheme.anime_slug}-${ratedTheme.theme_slug}:`, error);
+              return null;
             }
-            
-            // Encontrar o tema específico dentro do anime
-               let theme;
-               if (ratedTheme.theme_id) {
-                 // Buscar por ID quando disponível (mais preciso)
-                 theme = anime.animethemes.find((t: AnimeTheme) => t.id === ratedTheme.theme_id);
-                 console.log(`🎯 Buscando tema por ID: theme_id=${ratedTheme.theme_id}`);
-               } else {
-                 // Fallback: buscar por slug (dados antigos)
-                 theme = anime.animethemes.find((t: AnimeTheme) => t.slug === ratedTheme.theme_slug);
-                 console.log(`⚠️ Buscando tema por slug: ${ratedTheme.theme_slug}`);
-               }
-            
-            if (!theme || !theme.song) {
-              console.warn(`⚠️ Tema específico não encontrado no anime:`, ratedTheme.theme_slug);
-              return createThemeFromDatabase(ratedTheme, index);
-            }
-            
-            // Adicionar dados do anime ao tema
-            theme.anime = anime;
-            
-            // SÓ retornar se tiver TODOS os dados reais
-            return {
-              ...theme,
-              average_score: ratedTheme.average_score,
-              rating_count: ratedTheme.rating_count,
-            } as TopTheme;
-          } catch (error) {
-            console.error(`❌ Erro ao buscar tema ${ratedTheme.anime_slug}-${ratedTheme.theme_slug}:`, error);
-            return null; // NÃO mostrar dados inventados
-          }
-        });
-       
-       const themeDetails = await Promise.all(themeDetailsPromises);
-       const validThemes = themeDetails.filter((theme): theme is TopTheme => theme !== null);
-       
-       // Temas válidos processados
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          const validBatchThemes = batchResults.filter((theme): theme is TopTheme => theme !== null);
+          allThemes.push(...validBatchThemes);
+        }
         
-        // Se não há temas válidos, a lista ficará vazia
-        
-        setThemes(validThemes);
+        setThemes(allThemes);
        
      } catch (err) {
         console.error('Erro ao buscar temas:', err);

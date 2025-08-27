@@ -11,7 +11,9 @@ import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
 import ThemeCard from "@/components/ThemeCard";
 import NetworkErrorFallback from "@/components/NetworkErrorFallback";
-import { getThemeRatingDetailsClient } from "@/services/ratings";
+import { getThemeRatingDetailsBatch } from "@/services/ratings";
+import { createCacheKey, fetchAnimeThemesApi } from "@/services/cache";
+import type { RatingData } from "@/services/cache";
 
 // Tipagens
 interface Video { basename: string; link: string; }
@@ -30,7 +32,7 @@ function HomePageContent() {
   const [session, setSession] = useState<Session | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
   const [retryFunction, setRetryFunction] = useState<(() => void) | null>(null);
-  const [themeRatings, setThemeRatings] = useState<Map<string, { averageScore: number; ratingCount: number }>>(new Map());
+  const [themeRatings, setThemeRatings] = useState<Map<string, RatingData>>(new Map());
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,36 +42,45 @@ function HomePageContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Função para buscar ratings dos temas
-  const fetchThemeRatings = async (themesToRate: AnimeTheme[]) => {
-    const ratingsMap = new Map<string, { averageScore: number; ratingCount: number }>();
+
+
+  // Função simplificada para buscar ratings dos temas
+  const fetchThemeRatings = useCallback(async (themesToRate: AnimeTheme[]) => {
+    const ratingsMap = new Map<string, RatingData>();
     
-    // Buscar ratings em lotes para melhor performance
-    const batchSize = 10;
-    for (let i = 0; i < themesToRate.length; i += batchSize) {
-      const batch = themesToRate.slice(i, i + batchSize);
+    // Preparar lista de temas para busca
+    const themesToFetch = themesToRate
+      .filter(theme => theme.anime)
+      .map(theme => ({
+        animeSlug: theme.anime!.slug,
+        themeSlug: theme.slug
+      }));
+    
+    if (themesToFetch.length === 0) {
+      return;
+    }
+    
+    try {
+      // Buscar ratings em lote
+      const ratingsResults = await getThemeRatingDetailsBatch(themesToFetch);
       
-      const ratingPromises = batch.map(async (theme) => {
-        if (theme.anime) {
-          try {
-            const ratingDetails = await getThemeRatingDetailsClient(theme.anime.slug, theme.slug);
-            if (ratingDetails.averageScore !== null && ratingDetails.ratingCount > 0) {
-              ratingsMap.set(`${theme.anime.slug}-${theme.slug}`, {
-                averageScore: ratingDetails.averageScore,
-                ratingCount: ratingDetails.ratingCount
-              });
-            }
-          } catch (error) {
-            console.error(`Error fetching rating for ${theme.anime.slug}-${theme.slug}:`, error);
-          }
+      // Adicionar resultados ao mapa
+      ratingsResults.forEach((ratingDetails, key) => {
+        if (ratingDetails.averageScore !== null && ratingDetails.ratingCount > 0) {
+          ratingsMap.set(key, {
+            averageScore: ratingDetails.averageScore,
+            ratingCount: ratingDetails.ratingCount,
+            userScore: ratingDetails.userScore
+          });
         }
       });
-      
-      await Promise.all(ratingPromises);
+       
+    } catch (error) {
+      console.error('Erro ao buscar ratings:', error);
     }
     
     setThemeRatings(ratingsMap);
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const getSession = async () => {
@@ -103,31 +114,18 @@ function HomePageContent() {
       if (!year && !season && !type) {
         params.append('sort', '-created_at');
       }
-      const API_URL = `${endpoint}?${params.toString()}`;
+      const cacheKey = createCacheKey('themes', endpoint, params.toString());
       
       try {
-        console.log('🌐 Fazendo requisição para:', API_URL);
-        const response = await fetch(API_URL, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          // Add timeout and retry-friendly options
-          cache: 'no-cache',
-        });
-        console.log('📡 Resposta da API:', response.status, response.statusText);
+        console.log('🌐 Fazendo requisição otimizada para:', endpoint);
         
-        if (!response.ok) {
-          console.error('❌ Erro na API AnimeThemes:', response.status, response.statusText);
-          throw new Error(`A API AnimeThemes respondeu com o status: ${response.status}`);
-        }
-        
-        const data = await response.json();
+        // Usar função otimizada com cache e retry automático
+        const data = await fetchAnimeThemesApi(endpoint, params, cacheKey);
         
         let finalThemes: AnimeTheme[];
         if (year || season) {
-          const allThemes = (data.anime as Anime[]).flatMap(anime => 
+          const animeData = data as { anime: Anime[] };
+          const allThemes = animeData.anime.flatMap(anime => 
             anime.animethemes?.map(theme => ({
               ...theme, 
               anime: { name: anime.name, slug: anime.slug, images: anime.images }
@@ -181,7 +179,7 @@ function HomePageContent() {
     return () => {
       controller.abort();
     };
-  }, [searchParams]);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilterChange = useCallback((filters: { year: string; season: string; type: string }) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));

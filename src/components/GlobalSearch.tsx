@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
 
@@ -22,12 +22,12 @@ export default function GlobalSearch() {
   const router = useRouter(); // Initialize useRouter
   
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  const debouncedQuery = useDebounce(query, 500);
+  const debouncedQuery = useDebounce(query, 300); // Reduzido de 500ms para 300ms
   useOnClickOutside(searchContainerRef, () => setIsDropdownOpen(false));
 
   useEffect(() => {
     // Early return if query is empty or too short
-    if (!debouncedQuery || debouncedQuery.trim() === '' || debouncedQuery.length < 3) {
+    if (!debouncedQuery || debouncedQuery.trim() === '' || debouncedQuery.length < 2) {
       setResults({});
       setIsDropdownOpen(false);
       return;
@@ -38,23 +38,32 @@ export default function GlobalSearch() {
     async function fetchSearchResults() {
       setIsLoading(true);
       
-      const encodedQuery = encodeURIComponent(debouncedQuery);
-      
-      // URL ROBUSTA: Usando 'fields' para garantir que a resposta seja sempre um objeto
-      const API_URL = `https://api.animethemes.moe/search?q=${encodedQuery}&fields[search]=anime,artists,animethemes&include[animetheme]=song,anime`;
-
       try {
-        const response = await fetch(API_URL);
-        if (!response.ok) {
-          const errorBody = await response.text();
-          console.error("Corpo do erro da API:", errorBody);
-          throw new Error(`A API respondeu com o status: ${response.status}`);
-        }
-        const data = await response.json();
+          const encodedQuery = encodeURIComponent(debouncedQuery);
+          
+          // URL ROBUSTA: Usando 'fields' para garantir que a resposta seja sempre um objeto
+          const API_URL = `https://api.animethemes.moe/search?q=${encodedQuery}&fields[search]=anime,artists,animethemes&include[animetheme]=song,anime`;
+
+          const response = await fetch(API_URL);
+          if (!response.ok) {
+            const errorBody = await response.text();
+            console.error("Corpo do erro da API:", errorBody);
+            throw new Error(`A API respondeu com o status: ${response.status}`);
+          }
+          const data = await response.json();
+          
+          // Verificação final: Garante que `results` seja sempre um objeto.
+          // Se data.search for um array (como no log), o resultado será um objeto vazio.
+          const searchResults = typeof data.search === 'object' && !Array.isArray(data.search) ? data.search : {};
+          
+          // Limitar resultados por categoria para melhor UX
+          const limitedResults = {
+            anime: (searchResults.anime || []).slice(0, 5),
+            artists: (searchResults.artists || []).slice(0, 5),
+            animethemes: (searchResults.animethemes || []).slice(0, 8)
+          };
         
-        // Verificação final: Garante que `results` seja sempre um objeto.
-        // Se data.search for um array (como no log), o resultado será um objeto vazio.
-        setResults(typeof data.search === 'object' && !Array.isArray(data.search) ? data.search : {});
+        setResults(limitedResults);
 
       } catch (error) {
         console.error("Erro ao buscar resultados:", error);
@@ -88,7 +97,7 @@ export default function GlobalSearch() {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => { if (query.length > 2) setIsDropdownOpen(true); }}
+        onFocus={() => { if (query.length > 1) setIsDropdownOpen(true); }}
         placeholder="Buscar animes, músicas, artistas..."
         className="w-full bg-slate-700/50 backdrop-blur-sm border border-slate-600/80 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
       />
@@ -97,7 +106,7 @@ export default function GlobalSearch() {
         <div className="absolute top-full mt-2 w-full bg-slate-800/90 backdrop-blur-sm border border-slate-300/10 rounded-lg shadow-lg z-30 max-h-96 overflow-y-auto">
           {isLoading && <div className="p-4 text-gray-400 text-center">Buscando...</div>}
           
-          {!isLoading && !hasResults && debouncedQuery.length > 2 && (
+          {!isLoading && !hasResults && debouncedQuery.length > 1 && (
             <div className="p-4 text-gray-400 text-center">Nenhum resultado encontrado.</div>
           )}
 

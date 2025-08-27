@@ -1,7 +1,7 @@
 // src/components/RatingStars.tsx
 'use client'
 
-import { useState, useEffect, useTransition, useCallback } from 'react'
+import { useState, useEffect, useTransition, useCallback, useMemo } from 'react'
 import { saveRating, getThemeRatingDetails } from '@/app/actions'
 
 interface RatingStarsProps {
@@ -32,21 +32,56 @@ export default function RatingStars({
   const [currentAverageScore, setCurrentAverageScore] = useState<number | null>(null);
   const [currentRatingCount, setCurrentRatingCount] = useState<number>(0);
   const [currentUserScore, setCurrentUserScore] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Mudado para false para carregamento mais rápido
   const [isSubmitting, startSubmitTransition] = useTransition();
 
+  // Cache local para evitar requisições desnecessárias
+  const cacheKey = useMemo(() => `${animeSlug}-${themeSlug}`, [animeSlug, themeSlug]);
+  
   const fetchDetails = useCallback(async () => {
+    // Verificar cache local primeiro
+    const cached = sessionStorage.getItem(`rating-${cacheKey}`);
+    if (cached) {
+      try {
+        const details = JSON.parse(cached);
+        // Verificar se o cache não expirou (5 minutos)
+        const isExpired = Date.now() - details.timestamp > 5 * 60 * 1000;
+        if (!isExpired) {
+          setCurrentAverageScore(details.averageScore);
+          setCurrentRatingCount(details.ratingCount);
+          setCurrentUserScore(details.userScore);
+          return; // Usar dados do cache
+        } else {
+          // Cache expirado, remover
+          sessionStorage.removeItem(`rating-${cacheKey}`);
+        }
+      } catch {
+        // Cache inválido, remover
+        sessionStorage.removeItem(`rating-${cacheKey}`);
+      }
+    }
+    
+    setIsLoading(true);
     try {
       const details = await getThemeRatingDetails(animeSlug, themeSlug);
       setCurrentAverageScore(details.averageScore);
       setCurrentRatingCount(details.ratingCount);
       setCurrentUserScore(details.userScore);
+      
+      // Salvar no cache por 5 minutos
+      const cacheData = {
+        averageScore: details.averageScore,
+        ratingCount: details.ratingCount,
+        userScore: details.userScore,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(`rating-${cacheKey}`, JSON.stringify(cacheData));
     } catch (error) {
       console.error("Failed to fetch rating details:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [animeSlug, themeSlug]);
+  }, [animeSlug, themeSlug, cacheKey]);
 
   useEffect(() => {
     fetchDetails();
@@ -54,6 +89,8 @@ export default function RatingStars({
 
   const handleRatingSubmit = (scoreToSave: number | null) => {
     if (!isLoggedIn || isSubmitting) return;
+    
+    // Atualização otimista da UI
     setCurrentUserScore(scoreToSave);
     
     startSubmitTransition(async () => {
@@ -65,9 +102,19 @@ export default function RatingStars({
           formData.append('score', scoreToSave.toString());
         }
         await saveRating(formData);
-        await fetchDetails(); 
+        
+        // Atualizar cache local em vez de fazer nova requisição
+        const cacheData = {
+          averageScore: currentAverageScore,
+          ratingCount: currentRatingCount,
+          userScore: scoreToSave,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(`rating-${cacheKey}`, JSON.stringify(cacheData));
+        
       } catch (error) {
         console.error("Failed to save rating:", error);
+        // Reverter mudança otimista em caso de erro
         fetchDetails(); 
       }
     });

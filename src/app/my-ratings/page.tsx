@@ -7,6 +7,7 @@ import ThemeCard from '@/components/ThemeCard';
 import ThemeCardSkeleton from '@/components/ThemeCardSkeleton';
 import CustomSelect from '@/components/CustomSelect';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
+import { fetchAnimeThemesApi } from '@/services/cache';
 
 // Interfaces
 interface Video { basename: string; link: string; }
@@ -14,7 +15,7 @@ interface AnimeThemeEntry { videos: Video[]; }
 interface ImageType { facet: 'poster' | 'cover' | 'Large Cover' | 'Small Cover'; link: string; }
 interface Artist { id: number; name: string; slug?: string; }
 interface Song { title: string; artists?: Artist[]; }
-interface Anime { name: string; slug: string; images: ImageType[]; }
+interface Anime { name: string; slug: string; images: ImageType[]; animethemes?: AnimeTheme[]; }
 interface AnimeTheme { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; anime: Anime | null; }
 
 interface UserRating extends AnimeTheme {
@@ -88,121 +89,58 @@ export default function MyRatingsPage() {
       
       console.log('📊 Avaliações do usuário encontradas:', testRatings.length);
       
-      // Buscar detalhes de cada tema da API AnimeThemes
-      const enrichedRatings = await Promise.all(
-        testRatings.map(async (rating) => {
+      // Buscar detalhes em lotes otimizados
+      const BATCH_SIZE = 50;
+      const enrichedRatings: UserRating[] = [];
+      
+      for (let i = 0; i < testRatings.length; i += BATCH_SIZE) {
+        const batch = testRatings.slice(i, i + BATCH_SIZE);
+        
+        const batchPromises = batch.map(async (rating) => {
           try {
-              // Sempre usar slug primeiro (mais confiável que anime_id desatualizado)
-              const apiUrl = `https://api.animethemes.moe/anime/${rating.anime_slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
-              
-              // Se slug falhar, tentar por ID como fallback
-              const shouldTryById = Boolean(rating.anime_id);
-              
-              const response = await fetch(apiUrl, {
-                headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json',
-                },
-                cache: 'no-cache',
-              });
-              
-              if (!response.ok && shouldTryById) {
-                 console.warn(`⚠️ API falhou por slug para ${rating.anime_slug}:`, response.status);
-                 console.log(`🔄 Tentando por ID: anime_id=${rating.anime_id}`);
-                 
-                 // Tentar por ID como fallback
-                 const apiUrlById = `https://api.animethemes.moe/anime/${rating.anime_id}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
-                 const responseById = await fetch(apiUrlById, {
-                   headers: {
-                     'Accept': 'application/json',
-                     'Content-Type': 'application/json',
-                   },
-                   cache: 'no-cache',
-                 });
-                 
-                 if (!responseById.ok) {
-                   console.warn(`⚠️ API falhou também por ID para ${rating.anime_id}:`, responseById.status);
-                   return createFallbackRating(rating);
-                 }
-                 
-                 const dataById = await responseById.json();
-                 const animeById = dataById.anime;
-                 
-                 if (!animeById || !animeById.animethemes) {
-                   console.warn(`⚠️ Dados incompletos na API por ID:`, rating.anime_id);
-                   return createFallbackRating(rating);
-                 }
-                 
-                 // Processar dados do ID
-                 let themeById;
-                 if (rating.theme_id) {
-                   themeById = animeById.animethemes.find((t: AnimeTheme) => t.id === rating.theme_id);
-                 } else {
-                   themeById = animeById.animethemes.find((t: AnimeTheme) => t.slug === rating.theme_slug);
-                 }
-                 
-                 if (!themeById || !themeById.song) {
-                   console.warn(`⚠️ Tema não encontrado por ID:`, rating.theme_slug);
-                   return createFallbackRating(rating);
-                 }
-                 
-                 themeById.anime = animeById;
-                 console.log(`✅ Tema encontrado por ID:`, themeById.anime.name, themeById.song.title);
-                 
-                 return {
-                   ...themeById,
-                   user_score: rating.score,
-                   created_at: rating.created_at
-                 } as UserRating;
-                 
-               } else if (!response.ok) {
-                 console.warn(`⚠️ API falhou para ${rating.anime_slug}-${rating.theme_slug}:`, response.status);
-                 return createFallbackRating(rating);
-               }
-              
-              const data = await response.json();
-              const anime = data.anime;
-              
-              if (!anime || !anime.animethemes) {
-                console.warn(`⚠️ Dados incompletos na API (sem anime ou temas):`, rating.anime_slug);
-                return createFallbackRating(rating);
-              }
-              
-              // Encontrar o tema específico dentro do anime
-              let theme;
-              if (rating.theme_id) {
-                // Buscar por ID quando disponível (mais preciso)
+            const endpoint = `https://api.animethemes.moe/anime/${rating.anime_slug}`;
+            const params = new URLSearchParams({
+              include: 'images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos'
+            });
+            
+            const data = await fetchAnimeThemesApi(endpoint, params);
+            const anime = (data as { anime: Anime }).anime;
+            
+            if (!anime || !anime.animethemes) {
+              return createFallbackRating(rating);
+            }
+            
+            // Encontrar o tema específico
+            let theme;
+            if (rating.theme_id) {
                 theme = anime.animethemes.find((t: AnimeTheme) => t.id === rating.theme_id);
-                console.log(`🎯 Buscando tema por ID: theme_id=${rating.theme_id}`);
               } else {
-                // Fallback: buscar por slug
                 theme = anime.animethemes.find((t: AnimeTheme) => t.slug === rating.theme_slug);
-                console.log(`⚠️ Buscando tema por slug: ${rating.theme_slug}`);
               }
               
               if (!theme) {
-                return createFallbackRating(rating);
+                return null;
               }
               
-              // Adicionar dados do anime ao tema
               theme.anime = anime;
               
-              // Retornar dados reais da API
               return {
                 ...theme,
                 user_score: rating.score,
                 created_at: rating.created_at
               } as UserRating;
               
-            } catch (error) {
-              console.error(`❌ Erro ao buscar tema ${rating.anime_slug}-${rating.theme_slug}:`, error);
-              return null; // NÃO mostrar dados inventados - igual ao Top 100
+            } catch {
+              return null;
             }
-        })
-      );
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        const validBatchRatings = batchResults.filter((rating): rating is UserRating => rating !== null);
+        enrichedRatings.push(...validBatchRatings);
+      }
       
-      // Filtrar apenas temas válidos com dados reais da API (igual ao Top 100)
-      const validRatings = enrichedRatings.filter((rating): rating is UserRating => rating !== null);
+      const validRatings = enrichedRatings;
       
       const openings = validRatings.filter(rating => rating.slug.startsWith('OP'));
       const endings = validRatings.filter(rating => rating.slug.startsWith('ED'));
