@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import AddToPlaylistButton from './AddToPlaylistButton';
+import RatingStars from './RatingStars';
 import { memo } from 'react';
 
 interface Artist {
@@ -23,6 +24,7 @@ interface ThemeCardProps {
   videoUrl?: string;
   onPlayVideo: (videoUrl: string) => void;
   averageRating?: number;
+  showRatingControls?: boolean;
 }
 
 const ThemeCard = memo(function ThemeCard({
@@ -36,7 +38,8 @@ const ThemeCard = memo(function ThemeCard({
   isLoggedIn,
   videoUrl,
   onPlayVideo,
-  averageRating
+  averageRating,
+  showRatingControls = true
 }: ThemeCardProps) {
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -117,8 +120,25 @@ const ThemeCard = memo(function ThemeCard({
           </p>
 
         </div>
-        <div className="flex justify-end mt-3">
-          {isLoggedIn && <AddToPlaylistButton themeId={themeId} />}
+        
+        {/* Área inferior do card */}
+        <div className="mt-auto pt-4">
+          <div className="flex items-center justify-between">
+            {/* Sistema de Avaliação */}
+            {showRatingControls && (
+              <div className="flex-1">
+                <RatingStars 
+                animeSlug={animeSlug}
+                themeSlug={themeSlug}
+                isLoggedIn={isLoggedIn}
+                displayMode="dropdown"
+              />
+              </div>
+            )}
+            
+            {/* Botão de Playlist */}
+            {isLoggedIn && <AddToPlaylistButton themeId={themeId} />}
+          </div>
         </div>
       </div>
     </motion.div>

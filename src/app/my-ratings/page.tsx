@@ -534,6 +534,7 @@ export default function MyRatingsPage() {
                     isLoggedIn={!!session}
                     videoUrl={rating.animethemeentries[0]?.videos[0]?.link}
                     onPlayVideo={setVideoForModal}
+                    showRatingControls={true}
                   />
                 </div>
               );

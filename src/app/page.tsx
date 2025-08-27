@@ -250,6 +250,7 @@ function HomePageContent() {
               videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
               onPlayVideo={setVideoForModal}
               averageRating={rating?.averageScore}
+              showRatingControls={true}
             />
           );
         })}

@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useTransition, useCallback } from 'react'
 import { saveRating, getThemeRatingDetails } from '@/app/actions'
-import type { MouseEvent } from 'react'; // Importe o tipo MouseEvent
 
 interface RatingStarsProps {
   animeSlug: string
   themeSlug: string
   isLoggedIn: boolean
+  displayMode?: 'dropdown' | 'stars'
 }
 
 const StarIcon = ({ className }: { className?: string }) => (
@@ -26,6 +26,7 @@ export default function RatingStars({
   animeSlug,
   themeSlug,
   isLoggedIn,
+  displayMode = 'stars'
 }: RatingStarsProps) {
   const [hoverRating, setHoverRating] = useState(0);
   const [currentAverageScore, setCurrentAverageScore] = useState<number | null>(null);
@@ -72,8 +73,15 @@ export default function RatingStars({
     });
   };
 
-  const handleStarClick = (e: MouseEvent<HTMLButtonElement>, ratingValue: number) => {
-    // AQUI ESTÁ A MUDANÇA PRINCIPAL!
+
+
+  if (isLoading) {
+    return <div className="text-sm text-gray-400 h-10 flex items-center">Loading ratings...</div>;
+  }
+
+  const displayScore = hoverRating || currentUserScore || 0;
+
+  const handleStarClick = (e: React.MouseEvent<HTMLButtonElement>, ratingValue: number) => {
     e.stopPropagation(); 
 
     if (ratingValue === currentUserScore) {
@@ -83,64 +91,222 @@ export default function RatingStars({
     }
   };
 
-  if (isLoading) {
-    return <div className="text-sm text-gray-400 h-10 flex items-center">Loading ratings...</div>;
-  }
-
-  const displayScore = hoverRating || currentUserScore || 0;
-
   const renderRatingControls = () => {
     if (!isLoggedIn) return null;
 
+    if (displayMode === 'dropdown') {
+      // Gerar opções de 0 a 10 com incrementos de 0.5
+      const ratingOptions = [];
+      for (let i = 0; i <= 10; i += 0.5) {
+        ratingOptions.push(i);
+      }
+
+      const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value;
+        if (value === '') {
+          handleRatingSubmit(null);
+        } else {
+          handleRatingSubmit(parseFloat(value));
+        }
+      };
+
+      return (
+        <select
+          value={currentUserScore || ''}
+          onChange={handleDropdownChange}
+          disabled={isSubmitting}
+          className="bg-slate-700 text-white text-xs px-1 py-1 rounded border border-slate-600 focus:border-blue-400 focus:outline-none transition-colors w-14"
+        >
+          <option value="">-</option>
+          {ratingOptions.map((rating) => (
+            <option key={rating} value={rating}>
+              {rating.toFixed(1)}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    // Modo estrelas
     return (
       <div 
-        className="flex items-center relative"
+        className="flex items-center gap-1"
         onMouseLeave={() => setHoverRating(0)}
       >
         {[...Array(10)].map((_, i) => {
-          const ratingValue = i + 1;
+          const starIndex = i + 1;
+          const halfValue = starIndex - 0.5;
+          const fullValue = starIndex;
+          
           const baseColorClass = 
-            displayScore <= 2 ? 'text-red-500'
+            displayScore <= 2 ? 'text-red-400'
             : displayScore <= 4 ? 'text-orange-400'
             : displayScore <= 6 ? 'text-yellow-400'
-            : displayScore <= 8 ? 'text-teal-400'
-            : 'text-indigo-400';
-          const starIconClassName = `w-6 h-6 transition-colors duration-200 ${
-            ratingValue <= displayScore ? baseColorClass : 'text-gray-600'
-          } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`;
-
+            : displayScore <= 8 ? 'text-emerald-400'
+            : 'text-purple-400';
+          
+          // Determinar se a estrela está cheia, meio cheia ou vazia
+          const isHalfFilled = displayScore === halfValue;
+          const isFullyFilled = displayScore >= fullValue;
+          
           return (
-            <button
-              key={ratingValue}
-              type="button"
-              className="appearance-none bg-transparent border-none p-0"
-              // AQUI ESTÁ A MUDANÇA PRINCIPAL!
-              // Passamos o evento (e) para a função handler.
-              onClick={(e) => handleStarClick(e, ratingValue)}
-              onMouseEnter={() => { 
-                if (!isSubmitting) setHoverRating(ratingValue);
-              }}
-              disabled={isSubmitting}
-              aria-label={`Rate ${ratingValue} out of 10`}
-            >
-              <StarIcon className={starIconClassName} />
-            </button>
+            <div key={starIndex} className="relative group">
+              {/* Estrela de fundo (vazia) */}
+              <StarIcon className={`w-4 h-4 transition-all duration-200 ${
+                isHalfFilled || isFullyFilled ? 'text-transparent' : 'text-gray-600 group-hover:text-gray-500'
+              }`} />
+              
+              {/* Estrela preenchida */}
+              {isFullyFilled && (
+                <div className="absolute inset-0">
+                  <StarIcon className={`w-6 h-6 transition-all duration-200 ${baseColorClass}`} />
+                </div>
+              )}
+              
+              {/* Meia estrela */}
+              {isHalfFilled && (
+                <div className="absolute inset-0 overflow-hidden">
+                  <div className="w-1/2 h-full">
+                    <StarIcon className={`w-6 h-6 transition-all duration-200 ${baseColorClass}`} />
+                  </div>
+                </div>
+              )}
+              
+              {/* Botão invisível para metade esquerda (0.5) */}
+              <button
+                type="button"
+                className="absolute left-0 top-0 w-1/2 h-full bg-transparent border-none cursor-pointer"
+                onClick={(e) => handleStarClick(e, halfValue)}
+                onMouseEnter={() => { 
+                  if (!isSubmitting) setHoverRating(halfValue);
+                }}
+                disabled={isSubmitting}
+                aria-label={`Rate ${halfValue} out of 10`}
+              />
+              
+              {/* Botão invisível para metade direita (1.0) */}
+              <button
+                type="button"
+                className="absolute right-0 top-0 w-1/2 h-full bg-transparent border-none cursor-pointer"
+                onClick={(e) => handleStarClick(e, fullValue)}
+                onMouseEnter={() => { 
+                  if (!isSubmitting) setHoverRating(fullValue);
+                }}
+                disabled={isSubmitting}
+                aria-label={`Rate ${fullValue} out of 10`}
+              />
+            </div>
           );
         })}
       </div>
     );
   };
 
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-      <div className="flex items-center gap-1 text-sm text-yellow-400">
-        <StarIcon className="w-5 h-5" />
-        <span className="font-bold text-lg">{currentAverageScore?.toFixed(1) ?? 'N/A'}</span>
-        <span className="text-gray-400">({currentRatingCount} votos)</span>
+  // Renderizar estrelas visuais para mostrar a nota atual
+  const renderDisplayStars = () => {
+    const displayScore = hoverRating || currentUserScore || currentAverageScore || 0;
+    const stars = [];
+    
+    for (let i = 1; i <= 10; i++) {
+      const halfValue = i - 0.5;
+      const fullValue = i;
+      
+      const isFullyFilled = displayScore >= fullValue;
+      const isHalfFilled = displayScore >= halfValue && displayScore < fullValue;
+      
+      const baseColorClass = 
+        displayScore <= 2 ? 'text-red-400'
+        : displayScore <= 4 ? 'text-orange-400'
+        : displayScore <= 6 ? 'text-yellow-400'
+        : displayScore <= 8 ? 'text-emerald-400'
+        : 'text-purple-400';
+      
+      stars.push(
+        <div key={i} className="relative group">
+          {isHalfFilled ? (
+            // Meia estrela com overlay
+            <div className="relative inline-block text-lg">
+              <span className="text-gray-600">★</span>
+              <span 
+                className={`absolute inset-0 overflow-hidden ${baseColorClass}`}
+                style={{ width: '50%' }}
+              >
+                ★
+              </span>
+            </div>
+          ) : (
+            // Estrela cheia ou vazia
+            <span className={`text-lg transition-all duration-200 ${
+              isFullyFilled ? baseColorClass : 'text-gray-600 group-hover:text-gray-500'
+            }`}>
+              ★
+            </span>
+          )}
+          
+          {/* Botões de interação apenas no modo stars */}
+          {displayMode === 'stars' && isLoggedIn && (
+            <>
+              {/* Botão invisível para metade esquerda (0.5) */}
+              <button
+                type="button"
+                className="absolute left-0 top-0 w-1/2 h-full bg-transparent border-none cursor-pointer"
+                onClick={(e) => handleStarClick(e, halfValue)}
+                onMouseEnter={() => { 
+                  if (!isSubmitting) setHoverRating(halfValue);
+                }}
+                disabled={isSubmitting}
+                aria-label={`Rate ${halfValue} out of 10`}
+              />
+              
+              {/* Botão invisível para metade direita (1.0) */}
+              <button
+                type="button"
+                className="absolute right-0 top-0 w-1/2 h-full bg-transparent border-none cursor-pointer"
+                onClick={(e) => handleStarClick(e, fullValue)}
+                onMouseEnter={() => { 
+                  if (!isSubmitting) setHoverRating(fullValue);
+                }}
+                disabled={isSubmitting}
+                aria-label={`Rate ${fullValue} out of 10`}
+              />
+            </>
+          )}
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className="flex items-center gap-0.5"
+        onMouseLeave={() => displayMode === 'stars' && setHoverRating(0)}
+      >
+        {stars}
       </div>
+    );
+  };
 
-      {renderRatingControls()}
-      {isSubmitting && <div className="text-sm text-gray-400">Saving...</div>}
+  if (displayMode === 'dropdown') {
+    return (
+      <div className="flex items-center gap-2">
+        {isLoggedIn && renderRatingControls()}
+        {isSubmitting && (
+          <div className="text-xs text-blue-400">Salvando...</div>
+        )}
+      </div>
+    );
+  }
+  
+  // Modo stars (páginas de anime/artista)
+  return (
+    <div className="flex items-center gap-2">
+      {renderDisplayStars()}
+      <span className="text-sm font-medium text-yellow-300">
+        {currentAverageScore?.toFixed(1) ?? 'N/A'}
+      </span>
+      <span className="text-xs text-gray-400">({currentRatingCount})</span>
+      {isSubmitting && (
+        <div className="text-xs text-blue-400 ml-2">Salvando...</div>
+      )}
     </div>
   );
 }
