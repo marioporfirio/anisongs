@@ -56,118 +56,94 @@ interface AnimeDetailPageProps {
 export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) {
   const { slug } = params;
 
-  try {
-    const [session, anime] = await Promise.all([
-      auth(),
-      getAnimeDetails(slug)
-    ]);
+  // Busca dados críticos — falha aqui mostra 404 ou erro real
+  const anime = await getAnimeDetails(slug);
 
-    const user = session?.user ?? null;
-    const images = Array.isArray(anime.images) ? anime.images : [];
-    const posterImage = images.find(img => img.facet === 'poster') ||
-                      images.find(img => img.facet === 'Large Cover') ||
-                      images.find(img => img.facet === 'Small Cover');
-
-    const coverImage = images.find(img => img.facet === 'cover' || img.facet === 'Large Cover');
-
-    // Busca as avaliações para todos os temas em lote
-    const ratingsMap = await getThemeRatingDetailsBatch(
+  // Auth e ratings são opcionais — falha aqui não quebra a página
+  const [session, ratingsMap] = await Promise.all([
+    auth().catch(() => null),
+    getThemeRatingDetailsBatch(
       anime.animethemes.map(t => ({ animeSlug: slug, themeSlug: t.slug }))
-    );
+    ).catch(() => new Map()),
+  ]);
 
-    const themesWithRatings: ThemeWithRating[] = anime.animethemes.map(theme => {
-      const key = `${slug}-${theme.slug}`;
-      const r = ratingsMap.get(key);
-      return {
-        ...theme,
-        ratingData: {
-          average_score: r?.averageScore ?? null,
-          rating_count: r?.ratingCount ?? 0,
-          user_score: r?.userScore ?? null,
-        },
-      };
-    });
+  const isLoggedIn = !!session?.user?.id;
+  const images = Array.isArray(anime.images) ? anime.images : [];
+  const posterImage = images.find(img => img.facet === 'poster') ||
+                    images.find(img => img.facet === 'Large Cover') ||
+                    images.find(img => img.facet === 'Small Cover');
+  const coverImage = images.find(img => img.facet === 'cover' || img.facet === 'Large Cover');
 
-    // Organiza as músicas por tipo (OP, ED, Outros)
-    const openings: ThemeWithRating[] = [];
-    const endings: ThemeWithRating[] = [];
-    const others: ThemeWithRating[] = [];
-    const getThemeNumber = (s: string) => { const match = s.match(/\d+/); return match ? parseInt(match[0], 10) : Infinity; };
-    const sortedThemes = [...themesWithRatings].sort((a, b) => getThemeNumber(a.slug) - getThemeNumber(b.slug));
-    sortedThemes.forEach(theme => {
-      if (theme.slug.startsWith('OP')) openings.push(theme);
-      else if (theme.slug.startsWith('ED')) endings.push(theme);
-      else others.push(theme);
-    });
+  const themesWithRatings: ThemeWithRating[] = anime.animethemes.map(theme => {
+    const r = ratingsMap.get(`${slug}-${theme.slug}`);
+    return {
+      ...theme,
+      ratingData: {
+        average_score: r?.averageScore ?? null,
+        rating_count: r?.ratingCount ?? 0,
+        user_score: r?.userScore ?? null,
+      },
+    };
+  });
 
-    // Renderiza a página com sucesso
-    return (
-      <main className="container mx-auto p-4 md:p-8 text-white">
-          <section className="relative h-48 md:h-64 rounded-lg overflow-hidden mb-6 shadow-lg bg-slate-900/50 backdrop-blur-sm border border-slate-300/10">
-            {coverImage && (
+  const getThemeNumber = (s: string) => { const match = s.match(/\d+/); return match ? parseInt(match[0], 10) : Infinity; };
+  const sorted = [...themesWithRatings].sort((a, b) => getThemeNumber(a.slug) - getThemeNumber(b.slug));
+  const openings = sorted.filter(t => t.slug.startsWith('OP'));
+  const endings  = sorted.filter(t => t.slug.startsWith('ED'));
+  const others   = sorted.filter(t => !t.slug.startsWith('OP') && !t.slug.startsWith('ED'));
+
+  return (
+    <main className="container mx-auto p-4 md:p-8 text-white">
+      <section className="relative h-48 md:h-64 rounded-lg overflow-hidden mb-6 shadow-lg bg-slate-900/50 backdrop-blur-sm border border-slate-300/10">
+        {coverImage && (
+          <Image
+            src={coverImage.link}
+            alt={`Cover image for ${anime.name}`}
+            fill
+            className="object-cover opacity-30"
+            priority
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
+      </section>
+
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        <div className="md:w-1/4 flex-shrink-0 relative -mt-24 md:-mt-32 z-10">
+          <div className="relative w-full h-auto aspect-[2/3] rounded-lg overflow-hidden shadow-xl bg-slate-900/50 backdrop-blur-sm border border-slate-300/10">
+            {posterImage && (
               <Image
-                src={coverImage.link}
-                alt={`Cover image for ${anime.name}`}
+                src={posterImage.link}
+                alt={`Poster for ${anime.name}`}
                 fill
-                className="object-cover opacity-30"
-                priority
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 25vw"
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
-          </section>
-
-          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-            <div className="md:w-1/4 flex-shrink-0 relative -mt-24 md:-mt-32 z-10">
-              <div className="relative w-full h-auto aspect-[2/3] rounded-lg overflow-hidden shadow-xl bg-slate-900/50 backdrop-blur-sm border border-slate-300/10">
-                {posterImage && (
-                  <Image
-                    src={posterImage.link}
-                    alt={`Poster for ${anime.name}`}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 25vw"
-                  />
-                )}
-              </div>
-              <div className="mt-4 text-center md:text-left">
-                <h1 className="text-3xl font-bold text-white">{anime.name}</h1>
-                <p className="text-lg text-slate-400">{anime.year} | {anime.season}</p>
-              </div>
-            </div>
-
-            <div className="md:w-3/4">
-              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-lg shadow-lg border border-slate-300/10">
-                <h2 className="text-xl font-semibold text-white mb-3">Sinopse</h2>
-                <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{anime.synopsis || "Sinopse não disponível."}</p>
-              </div>
-
-              <div className="mt-8">
-                <h2 className="text-2xl font-bold text-white mb-4">Músicas</h2>
-                <ThemeListClient
-                  openings={openings}
-                  endings={endings}
-                  others={others}
-                  animeSlug={slug}
-                  isLoggedIn={!!user?.id}
-                />
-              </div>
-            </div>
           </div>
-      </main>
-    );
-  } catch (error) {
-    console.error(`Erro ao carregar a página do anime ${slug}:`, error);
-    // Renderiza uma página de erro amigável
-    return (
-      <main className="container mx-auto p-4 md:p-8 text-white text-center">
-        <h1 className="text-3xl font-bold text-red-500 mb-4">Erro ao Carregar Dados</h1>
-        <p className="text-gray-300">
-          Ocorreu um erro inesperado ao tentar buscar as informações deste anime.
-        </p>
-        <p className="text-gray-400 mt-2">
-          A API externa pode estar temporariamente indisponível. Por favor, tente novamente mais tarde.
-        </p>
-      </main>
-    );
-  }
+          <div className="mt-4 text-center md:text-left">
+            <h1 className="text-3xl font-bold text-white">{anime.name}</h1>
+            <p className="text-lg text-slate-400">{anime.year} | {anime.season}</p>
+          </div>
+        </div>
+
+        <div className="md:w-3/4">
+          <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-lg shadow-lg border border-slate-300/10">
+            <h2 className="text-xl font-semibold text-white mb-3">Sinopse</h2>
+            <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{anime.synopsis || "Sinopse não disponível."}</p>
+          </div>
+
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold text-white mb-4">Músicas</h2>
+            <ThemeListClient
+              openings={openings}
+              endings={endings}
+              others={others}
+              animeSlug={slug}
+              isLoggedIn={isLoggedIn}
+            />
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
