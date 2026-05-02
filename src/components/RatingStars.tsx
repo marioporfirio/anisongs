@@ -364,7 +364,13 @@ export default function RatingStars({
 
   if (displayMode === 'dropdown') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {currentAverageScore !== null && currentRatingCount > 0 && (
+          <span className="text-xs text-gray-400">
+            ⭐ {currentAverageScore.toFixed(1)}
+            <span className="opacity-60 ml-0.5">({currentRatingCount})</span>
+          </span>
+        )}
         {isLoggedIn && renderRatingControls()}
         {isSubmitting && <span className="text-xs text-indigo-400">Salvando...</span>}
       </div>

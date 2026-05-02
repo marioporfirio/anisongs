@@ -211,7 +211,6 @@ function HomePageContent() {
               isLoggedIn={!!session?.user}
               videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
               onPlayVideo={setVideoForModal}
-              averageRating={rating?.averageScore}
               showRatingControls={true}
               ratingData={rating ? {
                 averageScore: rating.averageScore,

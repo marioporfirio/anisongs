@@ -522,6 +522,7 @@ export interface EnrichedTheme {
 export interface TopThemeResult extends EnrichedTheme {
   average_score: number;
   rating_count: number;
+  user_score: number | null;
 }
 
 export interface MyRatingResult extends EnrichedTheme {
@@ -530,6 +531,9 @@ export interface MyRatingResult extends EnrichedTheme {
 }
 
 export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100): Promise<TopThemeResult[]> {
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+
   const rows = await sql`
     SELECT anime_slug, theme_slug,
            ROUND(AVG(score)::numeric, 1) AS average_score,
@@ -545,13 +549,29 @@ export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100
   if (rows.length === 0) return [];
 
   const slugs = [...new Set(rows.map(r => r.anime_slug as string))];
-  const animeMap = await fetchAnimeBatch(slugs);
+  const [animeMap, userScoreMap] = await Promise.all([
+    fetchAnimeBatch(slugs),
+    userId
+      ? sql`
+          SELECT anime_slug, theme_slug, score
+          FROM ratings
+          WHERE user_id = ${userId}
+            AND anime_slug = ANY(${slugs})
+            AND theme_slug LIKE ${type + '%'}
+        `.then(rs => {
+          const m = new Map<string, number>();
+          rs.forEach(r => m.set(`${r.anime_slug}-${r.theme_slug}`, Number(r.score)));
+          return m;
+        })
+      : Promise.resolve(new Map<string, number>()),
+  ]);
 
   const results: TopThemeResult[] = [];
   for (const row of rows) {
     const animeSlug = row.anime_slug as string;
     const themeSlug = row.theme_slug as string;
     const anime = animeMap.get(animeSlug);
+    const userScore = userScoreMap.get(`${animeSlug}-${themeSlug}`) ?? null;
 
     if (!anime) {
       const name = animeSlug.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -568,6 +588,7 @@ export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100
         anime: { name, slug: animeSlug, posterUrl: null },
         average_score: parseFloat(Number(row.average_score).toFixed(1)),
         rating_count: Number(row.rating_count),
+        user_score: userScore,
       });
       continue;
     }
@@ -584,6 +605,7 @@ export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100
       },
       average_score: parseFloat(Number(row.average_score).toFixed(1)),
       rating_count: Number(row.rating_count),
+      user_score: userScore,
     });
   }
 

@@ -109,9 +109,6 @@ export default function Top100Page() {
                 <div className="absolute top-2 left-2 z-10 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
                   #{index + 1}
                 </div>
-                <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold px-2 py-1 rounded-full shadow-lg">
-                  ⭐ {theme.average_score.toFixed(1)}
-                </div>
                 <ThemeCard
                   animeName={theme.anime.name}
                   animeSlug={theme.anime.slug}
@@ -124,7 +121,7 @@ export default function Top100Page() {
                   videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
                   onPlayVideo={setVideoForModal}
                   showRatingControls={true}
-                  ratingData={{ averageScore: theme.average_score, ratingCount: theme.rating_count, userScore: null }}
+                  ratingData={{ averageScore: theme.average_score, ratingCount: theme.rating_count, userScore: theme.user_score }}
                 />
               </div>
             ))}

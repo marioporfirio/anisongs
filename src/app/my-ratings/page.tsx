@@ -204,9 +204,6 @@ export default function MyRatingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {sortedRatings.map((rating, i) => (
               <div key={`${rating.anime.slug}-${rating.slug}-${i}`} className="relative">
-                <div className="absolute top-2 right-2 z-10 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold px-2 py-1 rounded-full shadow-lg">
-                  ⭐ {rating.user_score}
-                </div>
                 <ThemeCard
                   animeName={rating.anime.name}
                   animeSlug={rating.anime.slug}
