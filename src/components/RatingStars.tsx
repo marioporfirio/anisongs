@@ -1,7 +1,7 @@
 // src/components/RatingStars.tsx
 'use client'
 
-import { useState, useEffect, useTransition, useCallback, useMemo } from 'react'
+import { useState, useEffect, useTransition, useCallback, useMemo, useRef } from 'react'
 import { saveRating, getThemeRatingDetails } from '@/app/actions'
 
 interface RatingStarsProps {
@@ -41,7 +41,9 @@ export default function RatingStars({
   const [currentRatingCount, setCurrentRatingCount] = useState<number>(initialRatingCount ?? 0);
   const [currentUserScore, setCurrentUserScore] = useState<number | null>(initialUserScore ?? null);
   const [isLoading, setIsLoading] = useState(!hasInitialData);
+  const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, startSubmitTransition] = useTransition();
+  const selectRef = useRef<HTMLSelectElement>(null);
 
   const cacheKey = useMemo(() => `${animeSlug}-${themeSlug}`, [animeSlug, themeSlug]);
 
@@ -140,39 +142,65 @@ export default function RatingStars({
     }
   };
 
+  const ratingOptions: number[] = [];
+  for (let i = 0; i <= 10; i += 0.5) ratingOptions.push(i);
+
+  const scoreColor = (s: number) =>
+    s <= 2 ? 'text-red-400' : s <= 4 ? 'text-orange-400' : s <= 6 ? 'text-yellow-400' : s <= 8 ? 'text-emerald-400' : 'text-purple-400';
+
   const renderRatingControls = () => {
     if (!isLoggedIn) return null;
 
     if (displayMode === 'dropdown') {
-      // Gerar opções de 0 a 10 com incrementos de 0.5
-      const ratingOptions = [];
-      for (let i = 0; i <= 10; i += 0.5) {
-        ratingOptions.push(i);
-      }
-
       const handleDropdownChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
-        if (value === '') {
-          handleRatingSubmit(null);
-        } else {
-          handleRatingSubmit(parseFloat(value));
-        }
+        const score = value === '' ? null : parseFloat(value);
+        handleRatingSubmit(score);
+        setIsEditing(false);
       };
 
+      // Tem nota e não está editando → mostra o chip clicável
+      if (currentUserScore !== null && !isEditing) {
+        return (
+          <button
+            onClick={() => {
+              setIsEditing(true);
+              setTimeout(() => selectRef.current?.focus(), 0);
+            }}
+            className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full border transition-all
+              ${scoreColor(currentUserScore)} border-current/30 bg-current/5 hover:bg-current/15`}
+            title="Clique para editar a nota"
+          >
+            ★ {currentUserScore.toFixed(1)}
+            <span className="opacity-60 text-[10px]">✎</span>
+          </button>
+        );
+      }
+
+      // Sem nota ou editando → mostra o select
       return (
-        <select
-          value={currentUserScore || ''}
-          onChange={handleDropdownChange}
-          disabled={isSubmitting}
-          className="bg-slate-700 text-white text-xs px-1 py-1 rounded border border-slate-600 focus:border-blue-400 focus:outline-none transition-colors w-14"
-        >
-          <option value="">-</option>
-          {ratingOptions.map((rating) => (
-            <option key={rating} value={rating}>
-              {rating.toFixed(1)}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <select
+            ref={selectRef}
+            value={currentUserScore ?? ''}
+            onChange={handleDropdownChange}
+            onBlur={() => { if (currentUserScore !== null) setIsEditing(false); }}
+            disabled={isSubmitting}
+            className="bg-slate-700 text-white text-xs px-1 py-1 rounded border border-slate-600 focus:border-indigo-400 focus:outline-none transition-colors w-14"
+          >
+            <option value="">-</option>
+            {ratingOptions.map(r => (
+              <option key={r} value={r}>{r.toFixed(1)}</option>
+            ))}
+          </select>
+          {isEditing && (
+            <button
+              onClick={() => setIsEditing(false)}
+              className="text-slate-500 hover:text-white text-xs leading-none"
+              title="Cancelar"
+            >✕</button>
+          )}
+        </div>
       );
     }
 
@@ -338,9 +366,7 @@ export default function RatingStars({
     return (
       <div className="flex items-center gap-2">
         {isLoggedIn && renderRatingControls()}
-        {isSubmitting && (
-          <div className="text-xs text-blue-400">Salvando...</div>
-        )}
+        {isSubmitting && <span className="text-xs text-indigo-400">Salvando...</span>}
       </div>
     );
   }
