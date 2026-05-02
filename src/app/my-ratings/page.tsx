@@ -210,6 +210,7 @@ export default function MyRatingsPage() {
                   videoUrl={rating.animethemeentries[0]?.videos[0]?.link}
                   onPlayVideo={setVideoForModal}
                   showRatingControls={true}
+                  ratingData={{ averageScore: null, ratingCount: 0, userScore: rating.user_score }}
                 />
               </div>
             ))}

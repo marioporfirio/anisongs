@@ -26,6 +26,7 @@ interface ThemeCardProps {
   averageRating?: number | null;
   showRatingControls?: boolean;
   isLoadingRating?: boolean;
+  ratingData?: { averageScore: number | null; ratingCount: number; userScore: number | null };
 }
 
 const ThemeCard = memo(function ThemeCard({
@@ -41,7 +42,8 @@ const ThemeCard = memo(function ThemeCard({
   onPlayVideo,
   averageRating,
   showRatingControls = true,
-  isLoadingRating = false
+  isLoadingRating = false,
+  ratingData,
 }: ThemeCardProps) {
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -135,11 +137,14 @@ const ThemeCard = memo(function ThemeCard({
                     <span className="text-xs text-slate-400">Carregando...</span>
                   </div>
                 ) : (
-                  <RatingStars 
+                  <RatingStars
                     animeSlug={animeSlug}
                     themeSlug={themeSlug}
                     isLoggedIn={isLoggedIn}
                     displayMode="dropdown"
+                    initialAverageScore={ratingData?.averageScore}
+                    initialRatingCount={ratingData?.ratingCount}
+                    initialUserScore={ratingData?.userScore}
                   />
                 )}
               </div>

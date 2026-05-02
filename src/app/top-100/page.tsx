@@ -128,6 +128,7 @@ export default function Top100Page() {
                   videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
                   onPlayVideo={setVideoForModal}
                   showRatingControls={true}
+                  ratingData={{ averageScore: theme.average_score, ratingCount: theme.rating_count, userScore: null }}
                 />
               </div>
             ))}

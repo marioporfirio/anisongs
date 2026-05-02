@@ -213,6 +213,11 @@ function HomePageContent() {
               onPlayVideo={setVideoForModal}
               averageRating={rating?.averageScore}
               showRatingControls={true}
+              ratingData={rating ? {
+                averageScore: rating.averageScore,
+                ratingCount: rating.ratingCount,
+                userScore: rating.userScore,
+              } : { averageScore: null, ratingCount: 0, userScore: null }}
             />
           );
         })}
