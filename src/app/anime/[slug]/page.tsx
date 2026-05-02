@@ -30,19 +30,18 @@ interface AnimeDetail { name: string; synopsis: string; year: number; season: st
 // Função para buscar dados da API externa
 async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     const API_URL = `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
-    const response = await fetch(API_URL, { next: { revalidate: 3600 } });
+    let response: Response;
+    try {
+        response = await fetch(API_URL, { next: { revalidate: 3600 } });
+    } catch {
+        throw new Error('Não foi possível conectar à API do AnimeThemes. Verifique sua conexão.');
+    }
+    if (response.status === 404) notFound();
     if (!response.ok) {
-        if (response.status === 404) {
-            notFound(); // Dispara o erro 404 do Next.js
-        }
-        // Para outros erros (500, 503, etc.), lança um erro que será pego pelo try/catch
-        throw new Error('Falha ao buscar dados do anime da API externa.');
+        throw new Error(`API retornou status ${response.status}. Tente novamente em instantes.`);
     }
     const data = await response.json();
-    // Se a API retornar 200 mas sem o objeto anime, trata como não encontrado
-    if (!data.anime) {
-        notFound();
-    }
+    if (!data.anime) notFound();
     return data.anime;
 }
 
