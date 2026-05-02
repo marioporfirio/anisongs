@@ -231,34 +231,35 @@ export async function getUserPlaylists() {
 
 // Adicionar tema a playlist
 export async function addThemeToPlaylist(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, message: 'Usuário não autenticado.' };
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, message: 'Usuário não autenticado.' };
 
-  const validated = PlaylistThemeSchema.safeParse({
-    playlistId: formData.get('playlistId'),
-    themeId: formData.get('themeId'),
-  });
-  if (!validated.success) return { success: false, message: 'Dados inválidos.' };
+    const validated = PlaylistThemeSchema.safeParse({
+      playlistId: formData.get('playlistId'),
+      themeId: formData.get('themeId'),
+    });
+    if (!validated.success) return { success: false, message: 'Dados inválidos.' };
 
-  const { playlistId, themeId } = validated.data;
-  const userId = session.user.id;
+    const { playlistId, themeId } = validated.data;
+    const userId = session.user.id;
 
-  const owned = await sql`
-    SELECT id FROM playlists WHERE id = ${playlistId} AND user_id = ${userId}
-  `;
-  if (owned.length === 0) return { success: false, message: 'Playlist não encontrada.' };
+    const owned = await sql`
+      SELECT id FROM playlists WHERE id = ${playlistId} AND user_id = ${userId}
+    `;
+    if (owned.length === 0) return { success: false, message: 'Playlist não encontrada.' };
 
-  const existing = await sql`
-    SELECT id FROM playlist_themes WHERE playlist_id = ${playlistId} AND theme_id = ${themeId}
-  `;
-  if (existing.length > 0) return { success: true, message: 'Música já está na playlist.' };
+    await sql`
+      INSERT INTO playlist_themes (playlist_id, theme_id) VALUES (${playlistId}, ${themeId})
+      ON CONFLICT (playlist_id, theme_id) DO NOTHING
+    `;
 
-  await sql`
-    INSERT INTO playlist_themes (playlist_id, theme_id) VALUES (${playlistId}, ${themeId})
-  `;
-
-  revalidatePath(`/playlists/${playlistId}`);
-  return { success: true, message: 'Música adicionada com sucesso!' };
+    revalidatePath(`/playlists/${playlistId}`);
+    return { success: true, message: 'Música adicionada com sucesso!' };
+  } catch (error) {
+    console.error('addThemeToPlaylist error:', error);
+    return { success: false, message: 'Erro ao adicionar música.' };
+  }
 }
 
 // Criar playlist

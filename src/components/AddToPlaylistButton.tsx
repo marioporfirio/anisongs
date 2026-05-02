@@ -76,15 +76,19 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
   }, [isOpen]);
 
   const handleAddToPlaylist = async (playlistId: number) => {
-    const formData = new FormData();
-    formData.append('playlistId', playlistId.toString());
-    formData.append('themeId', themeId.toString());
-    
-    const result = await addThemeToPlaylist(formData);
-    if (result.success) {
-      setIsAdded(true);
-      setTimeout(() => setIsAdded(false), 2000);
-      setIsOpen(false);
+    try {
+      const formData = new FormData();
+      formData.append('playlistId', playlistId.toString());
+      formData.append('themeId', themeId.toString());
+
+      const result = await addThemeToPlaylist(formData);
+      if (result.success) {
+        setIsAdded(true);
+        setTimeout(() => setIsAdded(false), 2000);
+        setIsOpen(false);
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar à playlist:', error);
     }
   };
 

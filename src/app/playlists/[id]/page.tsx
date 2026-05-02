@@ -31,15 +31,18 @@ export interface ClientPlaylistDetails extends Omit<ActionPlaylistDetails, 'them
 
 async function fetchThemeDetailsFromApiMoe(themeId: number): Promise<AnimeThemeMOE | null> {
   try {
-    const response = await fetch(`https://api.animethemes.moe/animetheme/${themeId}?include=song,anime,animethemeentries.videos`);
-    if (!response.ok) {
-      console.error(`Failed to fetch theme ${themeId} from animethemes.moe: ${response.status} ${response.statusText}`);
-      return null;
-    }
+    const response = await fetch(
+      `https://api.animethemes.moe/animetheme/${themeId}?include=song,anime,animethemeentries.videos`,
+      {
+        next: { revalidate: 3600 },
+        headers: { 'User-Agent': 'AniSongs/1.0 (https://github.com/marioporfirio/anisongs)' },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!response.ok) return null;
     const data = await response.json();
-    return data.animetheme as AnimeThemeMOE; // API nests the resource
-  } catch (error) {
-    console.error(`Network or parsing error fetching theme ${themeId}:`, error);
+    return data.animetheme as AnimeThemeMOE;
+  } catch {
     return null;
   }
 }
