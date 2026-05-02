@@ -9,15 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/auth-ui-react": "^0.4.7",
-    "@supabase/auth-ui-shared": "^0.1.8",
-    "@supabase/ssr": "^0.6.1",
-    "@supabase/supabase-js": "^2.50.1",
+    "@neondatabase/serverless": "^0.10.4",
     "axios": "^1.11.0",
+    "bcryptjs": "^2.4.3",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.12",
     "geist": "^1.4.2",
     "next": "^14.2.5",
+    "next-auth": "^5.0.0-beta.25",
     "react": "^18",
     "react-dom": "^18",
     "tailwind-scrollbar": "^4.0.2",
@@ -26,6 +25,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

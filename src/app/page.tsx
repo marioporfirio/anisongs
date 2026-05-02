@@ -3,15 +3,14 @@
 
 import { useEffect, useState, Suspense, useCallback } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import type { Session } from '@supabase/supabase-js';
+import { useSession } from "next-auth/react";
 import { motion } from 'framer-motion';
 
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import ThemeFilters from "@/components/ThemeFilters";
 import ThemeCard from "@/components/ThemeCard";
 import NetworkErrorFallback from "@/components/NetworkErrorFallback";
-import { getThemeRatingDetailsBatch } from "@/services/ratings";
+import { getThemeRatingDetailsBatch } from "@/app/actions";
 import { createCacheKey, fetchAnimeThemesApi } from "@/services/cache";
 import type { RatingData } from "@/services/cache";
 
@@ -29,15 +28,11 @@ function HomePageContent() {
   const [themes, setThemes] = useState<AnimeTheme[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
   const [retryFunction, setRetryFunction] = useState<(() => void) | null>(null);
   const [themeRatings, setThemeRatings] = useState<Map<string, RatingData>>(new Map());
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -83,17 +78,9 @@ function HomePageContent() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-    };
-    getSession();
-  }, [supabase]);
+    let mounted = true;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    
-    async function fetchFilteredThemes(retryCount = 0) {
+    async function fetchFilteredThemes() {
       setIsLoading(true);
       setError(null);
       const year = searchParams.get('year');
@@ -115,69 +102,46 @@ function HomePageContent() {
         params.append('sort', '-created_at');
       }
       const cacheKey = createCacheKey('themes', endpoint, params.toString());
-      
+
       try {
-        console.log('🌐 Fazendo requisição otimizada para:', endpoint);
-        
-        // Usar função otimizada com cache e retry automático
+        // fetchAnimeThemesApi já tem cache + retry automático com backoff
         const data = await fetchAnimeThemesApi(endpoint, params, cacheKey);
-        
+
+        if (!mounted) return;
+
         let finalThemes: AnimeTheme[];
         if (year || season) {
           const animeData = data as { anime: Anime[] };
-          const allThemes = animeData.anime.flatMap(anime => 
+          const allThemes = animeData.anime.flatMap(anime =>
             anime.animethemes?.map(theme => ({
-              ...theme, 
+              ...theme,
               anime: { name: anime.name, slug: anime.slug, images: anime.images }
             })) || []
           );
           finalThemes = type ? allThemes.filter(t => t.slug.startsWith(type)) : allThemes;
-          setThemes(finalThemes);
         } else {
           finalThemes = (data as ApiThemeResponse).animethemes || [];
-          setThemes(finalThemes);
         }
-        
-        // Buscar ratings para os temas carregados
+
+        setThemes(finalThemes);
         fetchThemeRatings(finalThemes);
       } catch (err) {
-        console.error('🚨 Erro completo:', err);
+        if (!mounted) return;
         if (err instanceof Error) {
-          if (err.name === 'AbortError') {
-            console.log('Request was aborted');
-            return;
-          }
-          
-          console.error('📋 Detalhes do erro:', {
-            name: err.name,
-            message: err.message,
-            stack: err.stack
-          });
-          
-          // Retry logic for network errors
-          if (retryCount < 3 && (err.message.includes('fetch') || err.message.includes('network') || err.message.includes('Failed to fetch'))) {
-            console.log(`🔄 Tentando novamente... Tentativa ${retryCount + 1}`);
-            setTimeout(() => fetchFilteredThemes(retryCount + 1), 1000 * (retryCount + 1));
-            return;
-          }
-          
-          console.error('API Error:', err);
           setError(`A API AnimeThemes está temporariamente indisponível. Erro: ${err.message}`);
         } else {
           setError("Ocorreu um erro desconhecido ao carregar os dados.");
         }
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     }
-    
-    // Set retry function for the error fallback
-    setRetryFunction(() => () => fetchFilteredThemes(0));
-    
+
+    setRetryFunction(() => fetchFilteredThemes);
     fetchFilteredThemes();
-    
+
     return () => {
-      controller.abort();
+      mounted = false;
     };
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -244,7 +208,7 @@ function HomePageContent() {
               songTitle={theme.song?.title || 'Untitled'}
               artists={theme.song?.artists}
               posterUrl={posterImage?.link}
-              isLoggedIn={!!session}
+              isLoggedIn={!!session?.user}
               videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
               onPlayVideo={setVideoForModal}
               averageRating={rating?.averageScore}

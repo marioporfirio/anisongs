@@ -1,9 +1,8 @@
 // src/app/playlists/[id]/page.tsx
 import { getPlaylistDetails, PlaylistDetails as ActionPlaylistDetails, PlaylistThemeItemData } from '@/app/actions';
 import { notFound } from 'next/navigation';
-import PlaylistDetailClient from './PlaylistDetailClient'; // Assuming this is the client component to be used/modified
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import PlaylistDetailClient from './PlaylistDetailClient';
+import { auth } from '@/auth';
 
 // Interface for theme data from animethemes.moe API (can be defined in client component too if only used there)
 interface AnimeThemeMOE {
@@ -53,32 +52,19 @@ export default async function PlaylistDetailPage({ params }: { params: { id: str
     notFound();
   }
 
-  // Supabase client for user session (used by getPlaylistDetails for private playlist check)
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookiesToSet) => {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-          } catch { /* Ignored for Server Components */ }
-        },
-      },
-    }
-  );
-  const { data: { user } } = await supabase.auth.getUser();
+  const [session, playlistData] = await Promise.all([
+    auth(),
+    getPlaylistDetails(playlistIdNum),
+  ]);
 
-  // Fetch initial playlist data (metadata + theme IDs) using the action
-  const playlistData = await getPlaylistDetails(playlistIdNum);
+  const user = session?.user ?? null;
 
   if (!playlistData) {
     notFound(); // Handles not found or not authorized (for private playlists)
   }
   
   const isOwner = user?.id === playlistData.user_id;
+
 
   // Enrich themes with details from animethemes.moe
   const enrichedThemes: EnrichedPlaylistTheme[] = (await Promise.all(

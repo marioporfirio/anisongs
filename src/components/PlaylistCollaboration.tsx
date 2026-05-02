@@ -65,12 +65,10 @@ export default function PlaylistCollaboration({
     setCollaborators(data as Collaborator[]);
   }, [playlistId]);
 
-  // Load recent changes
   const loadRecentChanges = useCallback(async () => {
-    if (!collaborativePlaylistService) return;
-    const changes = await collaborativePlaylistService.getRecentChanges(playlistId, 20);
-    setRecentChanges(changes);
-  }, [playlistId]);
+    // Real-time changes not available — no-op
+    setRecentChanges([]);
+  }, []);
 
   // Handle user session updates
   const handleSessionUpdate = useCallback((session: CollaborativeSession) => {
@@ -159,13 +157,7 @@ export default function PlaylistCollaboration({
       loadCollaborators();
       loadRecentChanges();
       
-      // Start collaborative session
-      collaborativePlaylistService.startCollaborativeSession(
-        playlistId,
-        handleSessionUpdate,
-        handleUserJoined,
-        handleUserLeft
-      );
+      collaborativePlaylistService.startCollaborativeSession();
       
       // Listen for real-time changes
       const handlePlaylistChange = () => {
@@ -176,7 +168,7 @@ export default function PlaylistCollaboration({
       
       return () => {
         if (collaborativePlaylistService) {
-          collaborativePlaylistService.stopCollaborativeSession(playlistId);
+          collaborativePlaylistService.stopCollaborativeSession();
         }
         window.removeEventListener('playlist-change', handlePlaylistChange as EventListener);
       };

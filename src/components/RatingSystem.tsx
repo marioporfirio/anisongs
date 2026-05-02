@@ -1,60 +1,48 @@
 // src/components/RatingSystem.tsx
 "use client";
 
-// MODIFICAÇÃO: Importa createBrowserClient do @supabase/ssr
-import { createBrowserClient } from "@supabase/ssr";
-import { useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { useState } from "react";
+import { saveRating } from "@/app/actions";
 
 interface RatingSystemProps {
-  session: Session | null;
+  isLoggedIn: boolean;
   animeSlug: string;
   themeSlug: string;
+  initialScore?: number | null;
 }
 
-export default function RatingSystem({ session, animeSlug, themeSlug }: RatingSystemProps) {
-  // MODIFICAÇÃO: Instancia o cliente com createBrowserClient
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-  const [userScore, setUserScore] = useState<number | null>(null);
+export default function RatingSystem({ isLoggedIn, animeSlug, themeSlug, initialScore }: RatingSystemProps) {
+  const [userScore, setUserScore] = useState<number | null>(initialScore ?? null);
 
   const handleRating = async (score: number) => {
-    if (!session) {
+    if (!isLoggedIn) {
       alert("Você precisa estar logado para avaliar!");
       return;
     }
 
-    const { error } = await supabase.from("ratings").upsert({
-      user_id: session.user.id,
-      anime_slug: animeSlug,
-      theme_slug: themeSlug,
-      score: score,
-    });
+    const formData = new FormData();
+    formData.set('animeSlug', animeSlug);
+    formData.set('themeSlug', themeSlug);
+    formData.set('score', String(score));
 
-    if (error) {
-      console.error("Erro ao salvar avaliação:", error);
-    } else {
+    try {
+      await saveRating(formData);
       setUserScore(score);
+    } catch (err) {
+      console.error("Erro ao salvar avaliação:", err);
     }
   };
-  
-  useEffect(() => {
-    // ... lógica para buscar a nota inicial ...
-  }, [session]);
 
-
-  if (!session) {
+  if (!isLoggedIn) {
     return <p className="text-xs text-gray-500">Faça login para avaliar.</p>;
   }
 
   return (
     <div>
       <h4 className="text-sm font-semibold text-white mt-2">Sua Avaliação:</h4>
-      <input 
-        type="number" 
-        min="0" max="10" step="0.5" 
+      <input
+        type="number"
+        min="0" max="10" step="0.5"
         className="bg-gray-700 text-white p-1 rounded"
         defaultValue={userScore ?? ""}
         onBlur={(e) => handleRating(parseFloat(e.target.value))}

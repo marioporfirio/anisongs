@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import ThemeListClient from "./ThemeListClient";
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { auth } from '@/auth';
 import { notFound } from 'next/navigation';
+import { getThemeRatingDetailsBatch } from '@/app/actions';
 
 // Tipagens
 export interface RatingData { average_score: number | null; rating_count: number; user_score: number | null; }
@@ -57,37 +57,12 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
   const { slug } = params;
 
   try {
-    const cookieStore = await cookies();
-
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options);
-              });
-            } catch {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing user sessions.
-            }
-          },
-        },
-      }
-    );
-
-    // Busca dados do usuário e do anime em paralelo
-    const [userResponse, anime] = await Promise.all([
-      supabase.auth.getUser(),
+    const [session, anime] = await Promise.all([
+      auth(),
       getAnimeDetails(slug)
     ]);
 
-    const user = userResponse.data.user;
+    const user = session?.user ?? null;
     const images = Array.isArray(anime.images) ? anime.images : [];
     const posterImage = images.find(img => img.facet === 'poster') ||
                       images.find(img => img.facet === 'Large Cover') ||
@@ -95,18 +70,23 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
 
     const coverImage = images.find(img => img.facet === 'cover' || img.facet === 'Large Cover');
 
-    // Busca as avaliações para cada música
-    const themesWithRatings = await Promise.all(
-      anime.animethemes.map(async (theme): Promise<ThemeWithRating> => {
-        const { data: avgData } = await supabase.rpc('get_theme_average_rating', { p_anime_slug: slug, p_theme_slug: theme.slug });
-        let userScore = null;
-        if (user) {
-          const { data: userRating } = await supabase.from('ratings').select('score').eq('user_id', user.id).eq('anime_slug', slug).eq('theme_slug', theme.slug).single();
-          userScore = userRating?.score ?? null;
-        }
-        return { ...theme, ratingData: { average_score: avgData?.[0]?.average_score ?? null, rating_count: avgData?.[0]?.rating_count ?? 0, user_score: userScore } };
-      })
+    // Busca as avaliações para todos os temas em lote
+    const ratingsMap = await getThemeRatingDetailsBatch(
+      anime.animethemes.map(t => ({ animeSlug: slug, themeSlug: t.slug }))
     );
+
+    const themesWithRatings: ThemeWithRating[] = anime.animethemes.map(theme => {
+      const key = `${slug}-${theme.slug}`;
+      const r = ratingsMap.get(key);
+      return {
+        ...theme,
+        ratingData: {
+          average_score: r?.averageScore ?? null,
+          rating_count: r?.ratingCount ?? 0,
+          user_score: r?.userScore ?? null,
+        },
+      };
+    });
 
     // Organiza as músicas por tipo (OP, ED, Outros)
     const openings: ThemeWithRating[] = [];
@@ -168,7 +148,7 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
                   endings={endings}
                   others={others}
                   animeSlug={slug}
-                  isLoggedIn={!!user}
+                  isLoggedIn={!!user?.id}
                 />
               </div>
             </div>

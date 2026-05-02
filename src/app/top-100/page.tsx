@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
-import type { Session } from '@supabase/supabase-js';
+import { useSession } from 'next-auth/react';
 import ThemeCard from '@/components/ThemeCard';
 import ThemeCardSkeleton from '@/components/ThemeCardSkeleton';
 import CustomSelect from '@/components/CustomSelect';
@@ -29,14 +28,9 @@ type ThemeType = 'OP' | 'ED' | 'IN';
 export default function Top100Page() {
   const [themes, setThemes] = useState<AnimeTheme[]>([]);
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
+  const { data: session } = useSession();
   const [selectedType, setSelectedType] = useState<ThemeType>('OP');
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   const closeModal = () => {
     setVideoForModal(null);
@@ -90,16 +84,6 @@ export default function Top100Page() {
       rating_count: ratedTheme.rating_count,
     } as TopTheme;
   };
-
-  useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-    };
-    getSession();
-  }, [supabase.auth]);
-
-
 
   const fetchTopThemes = useCallback(async (type: ThemeType) => {
     setLoading(true);

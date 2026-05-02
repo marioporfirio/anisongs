@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { createBrowserClient } from "@supabase/ssr";
-import type { ArtistDetails, ArtistThemeEntry, ApiImage, ApiArtist } from "@/types/animethemes"; 
+import { useSession } from "next-auth/react";
+import type { ArtistDetails, ArtistThemeEntry, ApiImage, ApiArtist } from "@/types/animethemes";
 import RatingStars from "@/components/RatingStars";
 import VideoPlayerModal from "@/components/VideoPlayerModal";
 import Link from "next/link";
@@ -25,29 +25,11 @@ export default function ArtistPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
-  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
-  
+  const { data: session } = useSession();
+  const isUserLoggedIn = !!session?.user;
+
   const [sortBy, setSortBy] = useState<'alphabetical' | 'releaseDate'>('alphabetical');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  useEffect(() => {
-    const getInitialSession = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      setIsUserLoggedIn(!!initialSession?.user);
-    };
-    getInitialSession();
-    const { data: authListener } = supabase.auth.onAuthStateChange((_, currentSession) => {
-      setIsUserLoggedIn(!!currentSession?.user);
-    });
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [supabase]);
 
   useEffect(() => {
     if (!artistSlug) {

@@ -273,7 +273,7 @@ export async function fetchWithRetry<T>(
   baseDelay: number = 1000
 ): Promise<T> {
   let lastError: Error = new Error('Unknown error');
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(url, {
@@ -286,44 +286,43 @@ export async function fetchWithRetry<T>(
       });
 
       if (!response.ok) {
-        // Para status 429 (rate limit), sempre tentar novamente
-        if (response.status === 429) {
-          throw new Error(`Rate limited: ${response.status}`);
+        // Erros 4xx (exceto 429) não devem ser retentados — falha imediata
+        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+          throw Object.assign(
+            new Error(`Client error: ${response.status} ${response.statusText}`),
+            { nonRetryable: true }
+          );
         }
-        
-        // Para outros erros 4xx, não tentar novamente
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(`Client error: ${response.status} ${response.statusText}`);
-        }
-        
-        // Para erros 5xx, tentar novamente
-        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          response.status === 429
+            ? `Rate limited: ${response.status}`
+            : `Server error: ${response.status} ${response.statusText}`
+        );
       }
 
       const data = await response.json();
-      
       if (attempt > 0) {
         console.log(`✅ Sucesso após ${attempt} tentativas para: ${url}`);
       }
-      
       return data as T;
     } catch (error) {
       lastError = error as Error;
-      
-      // Se não é o último attempt, aguardar antes de tentar novamente
+
+      // Não retentar erros de cliente (4xx)
+      if ((lastError as Error & { nonRetryable?: boolean }).nonRetryable) {
+        throw lastError;
+      }
+
       if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt); // Backoff exponencial
-        const jitter = Math.random() * 0.1 * delay; // Adicionar jitter
+        const delay = baseDelay * Math.pow(2, attempt);
+        const jitter = Math.random() * 0.1 * delay;
         const totalDelay = delay + jitter;
-        
         console.log(`⚠️ Tentativa ${attempt + 1} falhou para ${url}. Tentando novamente em ${Math.round(totalDelay)}ms...`);
-        console.log(`   Erro: ${lastError.message}`);
-        
         await new Promise(resolve => setTimeout(resolve, totalDelay));
       }
     }
   }
-  
+
   console.error(`❌ Todas as ${maxRetries + 1} tentativas falharam para: ${url}`);
   throw lastError;
 }

@@ -1,25 +1,29 @@
-// src/contexts/AuthContext.tsx
 "use client";
 
-import { createContext, useContext, ReactNode } from "react";
-import { useSupabase } from "@/hooks/useSupabase";
+import { createContext, ReactNode } from "react";
+import { useSession } from "next-auth/react";
 
-const AuthContext = createContext<ReturnType<typeof useSupabase> | undefined>(undefined);
+interface AuthContextValue {
+  session: ReturnType<typeof useSession>['data'];
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const supabaseData = useSupabase();
-  
+  const { data: session, status } = useSession();
   return (
-    <AuthContext.Provider value={supabaseData}>
+    <AuthContext.Provider value={{ session, loading: status === 'loading' }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const { data: session, status } = useSession();
+  return {
+    session,
+    loading: status === 'loading',
+    user: session?.user ?? null,
+  };
 }
