@@ -7,7 +7,7 @@ import ThemeCard from '@/components/ThemeCard';
 import ThemeCardSkeleton from '@/components/ThemeCardSkeleton';
 import CustomSelect from '@/components/CustomSelect';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
-import { getMyRatingsWithData, type MyRatingResult } from '@/app/actions';
+import { getMyRatingsWithData, deleteAllMyRatings, type MyRatingResult } from '@/app/actions';
 
 type SortOption = 'name' | 'score';
 type SortOrder = 'asc' | 'desc';
@@ -28,6 +28,7 @@ export default function MyRatingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [videoForModal, setVideoForModal] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [sortOptions, setSortOptions] = useState({
     openings: { by: 'score' as SortOption, order: 'desc' as SortOrder },
     endings:  { by: 'score' as SortOption, order: 'desc' as SortOrder },
@@ -79,6 +80,17 @@ export default function MyRatingsPage() {
     const s = sortOptions[getSortKey(type)];
     if (s.by !== by) return '↕️';
     return s.order === 'desc' ? '↓' : '↑';
+  };
+
+  const handleDeleteAll = async () => {
+    if (!confirm('Tem certeza? Todas as suas avaliações serão apagadas permanentemente.')) return;
+    setIsDeleting(true);
+    try {
+      await deleteAllMyRatings();
+      setRatings({ openings: [], endings: [], inserts: [] });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getTypeLabel = (type: ThemeType) =>
@@ -202,10 +214,7 @@ export default function MyRatingsPage() {
                   themeSlug={rating.slug}
                   songTitle={rating.song?.title ?? ''}
                   artists={rating.song?.artists}
-                  posterUrl={
-                    rating.anime.images?.find(img => img.facet === 'poster')?.link ||
-                    rating.anime.images?.find(img => img.facet === 'Large Cover')?.link
-                  }
+                  posterUrl={rating.anime.posterUrl ?? undefined}
                   isLoggedIn={!!session}
                   videoUrl={rating.animethemeentries[0]?.videos[0]?.link}
                   onPlayVideo={setVideoForModal}
@@ -214,6 +223,24 @@ export default function MyRatingsPage() {
                 />
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {totalRatings > 0 && (
+        <div className="mt-12 border-t border-red-900/40 pt-8">
+          <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-6 max-w-md">
+            <h3 className="text-red-400 font-semibold mb-1">Zona de Perigo</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Apaga permanentemente todas as suas {totalRatings} avaliações. Essa ação não pode ser desfeita.
+            </p>
+            <button
+              onClick={handleDeleteAll}
+              disabled={isDeleting}
+              className="bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+            >
+              {isDeleting ? 'Apagando...' : 'Apagar todas as avaliações'}
+            </button>
           </div>
         </div>
       )}

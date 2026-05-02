@@ -119,11 +119,7 @@ export default function Top100Page() {
                   themeSlug={theme.slug}
                   songTitle={theme.song?.title ?? ''}
                   artists={theme.song?.artists}
-                  posterUrl={
-                    theme.anime.images?.find(img => img.facet === 'poster')?.link ||
-                    theme.anime.images?.find(img => img.facet === 'Large Cover')?.link ||
-                    theme.anime.images?.find(img => img.facet === 'Small Cover')?.link
-                  }
+                  posterUrl={theme.anime.posterUrl ?? undefined}
                   isLoggedIn={!!session}
                   videoUrl={theme.animethemeentries[0]?.videos[0]?.link}
                   onPlayVideo={setVideoForModal}

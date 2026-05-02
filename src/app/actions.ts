@@ -420,12 +420,37 @@ interface CachedAnimeData {
   name: string;
   slug: string;
   images: Array<{ facet: string; link: string }>;
+  jikanPoster?: string | null;
   animethemes: Array<{
     id: number;
     slug: string;
     song: { title: string; artists?: Array<{ id: number; name: string; slug?: string }> } | null;
     animethemeentries: Array<{ videos: Array<{ link: string }> }>;
   }>;
+}
+
+function resolveAtPoster(images: Array<{ facet: string; link: string }>): string | null {
+  return (
+    images.find(img => img.facet === 'poster')?.link ||
+    images.find(img => img.facet === 'Large Cover')?.link ||
+    images.find(img => img.facet === 'Small Cover')?.link ||
+    null
+  );
+}
+
+async function fetchJikanPoster(slug: string): Promise<string | null> {
+  try {
+    const query = encodeURIComponent(slug.replace(/-/g, ' '));
+    const res = await fetch(`https://api.jikan.moe/v4/anime?q=${query}&limit=1`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const anime = data.data?.[0];
+    return anime?.images?.webp?.large_image_url || anime?.images?.jpg?.large_image_url || null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchAnimeBatch(slugs: string[]): Promise<Map<string, CachedAnimeData>> {
@@ -452,17 +477,18 @@ async function fetchAnimeBatch(slugs: string[]): Promise<Map<string, CachedAnime
     const batch = missingSlugs.slice(i, i + CONCURRENT);
     const fetched = await Promise.all(
       batch.map(async slug => {
-        try {
-          const res = await fetch(
+        const [atRes, jikanPoster] = await Promise.all([
+          fetch(
             `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`,
             { next: { revalidate: 86400 } }
-          );
-          if (!res.ok) return null;
-          const data = await res.json();
-          return data.anime ? { slug, anime: data.anime as CachedAnimeData } : null;
-        } catch {
-          return null;
-        }
+          ).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetchJikanPoster(slug),
+        ]);
+
+        const anime: CachedAnimeData | null = atRes?.anime ?? null;
+        if (!anime) return null;
+        anime.jikanPoster = jikanPoster;
+        return { slug, anime };
       })
     );
 
@@ -486,7 +512,7 @@ export interface EnrichedTheme {
   slug: string;
   song: { title: string; artists?: Array<{ id: number; name: string; slug?: string }> } | null;
   animethemeentries: Array<{ videos: Array<{ link: string }> }>;
-  anime: { name: string; slug: string; images: Array<{ facet: string; link: string }> };
+  anime: { name: string; slug: string; posterUrl: string | null };
 }
 
 export interface TopThemeResult extends EnrichedTheme {
@@ -535,7 +561,7 @@ export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100
         slug: themeSlug,
         song: { title: label, artists: [] },
         animethemeentries: [],
-        anime: { name, slug: animeSlug, images: [] },
+        anime: { name, slug: animeSlug, posterUrl: null },
         average_score: parseFloat(Number(row.average_score).toFixed(1)),
         rating_count: Number(row.rating_count),
       });
@@ -547,7 +573,11 @@ export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100
 
     results.push({
       ...theme,
-      anime: { name: anime.name, slug: anime.slug, images: anime.images },
+      anime: {
+        name: anime.name,
+        slug: anime.slug,
+        posterUrl: anime.jikanPoster || resolveAtPoster(anime.images),
+      },
       average_score: parseFloat(Number(row.average_score).toFixed(1)),
       rating_count: Number(row.rating_count),
     });
@@ -590,7 +620,7 @@ export async function getMyRatingsWithData(): Promise<MyRatingResult[]> {
         slug: themeSlug,
         song: { title: label, artists: [] },
         animethemeentries: [],
-        anime: { name, slug: animeSlug, images: [] },
+        anime: { name, slug: animeSlug, posterUrl: null },
         user_score: Number(row.score),
         created_at: row.created_at as string,
       });
@@ -602,11 +632,24 @@ export async function getMyRatingsWithData(): Promise<MyRatingResult[]> {
 
     results.push({
       ...theme,
-      anime: { name: anime.name, slug: anime.slug, images: anime.images },
+      anime: {
+        name: anime.name,
+        slug: anime.slug,
+        posterUrl: anime.jikanPoster || resolveAtPoster(anime.images),
+      },
       user_score: Number(row.score),
       created_at: row.created_at as string,
     });
   }
 
   return results;
+}
+
+export async function deleteAllMyRatings(): Promise<{ success: boolean }> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false };
+
+  await sql`DELETE FROM ratings WHERE user_id = ${session.user.id}`;
+  revalidatePath('/my-ratings');
+  return { success: true };
 }
