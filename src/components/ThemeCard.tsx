@@ -80,6 +80,13 @@ const ThemeCard = memo(function ThemeCard({
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+
+          {ratingData?.averageScore != null && ratingData.ratingCount > 0 && (
+            <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-10 flex items-center gap-1">
+              ⭐ {ratingData.averageScore.toFixed(1)}
+              <span className="opacity-60 font-normal">({ratingData.ratingCount})</span>
+            </div>
+          )}
         </div>
       </Link>
       <div className="p-4 flex-grow flex flex-col justify-between">
