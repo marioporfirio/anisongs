@@ -6,7 +6,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 's4.anilist.co', // Domínio principal para as imagens da API
+        hostname: 's4.anilist.co',
       },
       {
         protocol: 'https',
@@ -14,24 +14,17 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'lh3.googleusercontent.com', // Added for Google user avatars
+        hostname: 'lh3.googleusercontent.com',
       },
-      // Se no futuro aparecerem imagens de outros domínios, é só adicionar aqui
+      {
+        protocol: 'https',
+        hostname: 'cdn.myanimelist.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
     ],
-  },
-  webpack: (config, { dev, isServer }) => {
-    // Suppress Supabase realtime warnings in development
-    if (dev && !isServer) {
-      config.ignoreWarnings = [
-        { module: /node_modules\/@supabase\/realtime-js/ },
-        /Critical dependency: the request of a dependency is an expression/,
-      ];
-    }
-    return config;
-  },
-  // Improve development experience
-  experimental: {
-    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
   },
 };
 

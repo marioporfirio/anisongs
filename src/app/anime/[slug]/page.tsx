@@ -12,22 +12,34 @@ export interface ThemeWithRating extends AnimeThemeForDetail { ratingData: Ratin
 interface Video { link: string; }
 interface AnimeThemeEntry { videos: Video[]; }
 
-// Nova interface para Artist
 interface Artist {
   id: number;
   name: string;
-  slug: string; // Adicionando slug caso seja útil para links futuros
+  slug: string;
 }
 
 interface Song {
   title: string;
-  artists?: Artist[]; // Array de artistas, opcional
+  artists?: Artist[];
 }
 
 export interface AnimeThemeForDetail { id: number; slug: string; song: Song | null; animethemeentries: AnimeThemeEntry[]; }
 interface AnimeDetail { name: string; synopsis: string; year: number; season: string; images: Array<{ facet: 'poster' | 'cover' | 'Large Cover' | 'Small Cover', link: string }>; animethemes: AnimeThemeForDetail[]; }
 
-// Função para buscar dados da API externa
+interface JikanAnime {
+  mal_id: number;
+  title: string;
+  title_english: string | null;
+  synopsis: string | null;
+  year: number | null;
+  season: string | null;
+  images: {
+    jpg: { large_image_url: string | null };
+    webp: { large_image_url: string | null };
+  };
+}
+
+// Busca temas e vídeos — crítico, erro aqui quebra a página
 async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     const API_URL = `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
     let response: Response;
@@ -45,21 +57,36 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     return data.anime;
 }
 
-// Define a interface para as props da página de forma explícita e simples.
+// Busca metadados da Jikan (MAL) — opcional, falha não quebra a página
+async function getJikanData(slug: string): Promise<JikanAnime | null> {
+  try {
+    const query = encodeURIComponent(slug.replace(/-/g, ' '));
+    const response = await fetch(
+      `https://api.jikan.moe/v4/anime?q=${query}&limit=1`,
+      { next: { revalidate: 86400 } }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.data?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 interface AnimeDetailPageProps {
   params: { slug: string };
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
-// Componente principal da página
 export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) {
   const { slug } = params;
 
-  // Busca dados críticos — falha aqui mostra 404 ou erro real
+  // AnimeThemes é crítico — falha mostra 404 ou erro real
   const anime = await getAnimeDetails(slug);
 
-  // Auth e ratings são opcionais — falha aqui não quebra a página
-  const [session, ratingsMap] = await Promise.all([
+  // Jikan, auth e ratings são opcionais — falha não quebra a página
+  const [jikan, session, ratingsMap] = await Promise.all([
+    getJikanData(slug),
     auth().catch(() => null),
     getThemeRatingDetailsBatch(
       anime.animethemes.map(t => ({ animeSlug: slug, themeSlug: t.slug }))
@@ -67,10 +94,22 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
   ]);
 
   const isLoggedIn = !!session?.user?.id;
+
+  // Metadados: Jikan tem precedência (mais rápido/estável), AnimeThemes como fallback
+  const displayName = anime.name;
+  const displaySynopsis = jikan?.synopsis || anime.synopsis || '';
+  const displayYear = jikan?.year ?? anime.year;
+  const displaySeason = jikan?.season ?? anime.season;
+
+  // Poster: preferir MAL (Jikan), depois AnimeThemes
+  const jikanPoster = jikan?.images?.webp?.large_image_url || jikan?.images?.jpg?.large_image_url;
   const images = Array.isArray(anime.images) ? anime.images : [];
-  const posterImage = images.find(img => img.facet === 'poster') ||
-                    images.find(img => img.facet === 'Large Cover') ||
-                    images.find(img => img.facet === 'Small Cover');
+  const atPoster = images.find(img => img.facet === 'poster') ||
+                   images.find(img => img.facet === 'Large Cover') ||
+                   images.find(img => img.facet === 'Small Cover');
+  const posterSrc = jikanPoster || atPoster?.link || null;
+
+  // Cover banner: apenas AnimeThemes tem isso
   const coverImage = images.find(img => img.facet === 'cover' || img.facet === 'Large Cover');
 
   const themesWithRatings: ThemeWithRating[] = anime.animethemes.map(theme => {
@@ -97,7 +136,7 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
         {coverImage && (
           <Image
             src={coverImage.link}
-            alt={`Cover image for ${anime.name}`}
+            alt={`Cover image for ${displayName}`}
             fill
             className="object-cover opacity-30"
             priority
@@ -109,10 +148,10 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
       <div className="flex flex-col md:flex-row gap-6 md:gap-8">
         <div className="md:w-1/4 flex-shrink-0 relative -mt-24 md:-mt-32 z-10">
           <div className="relative w-full h-auto aspect-[2/3] rounded-lg overflow-hidden shadow-xl bg-slate-900/50 backdrop-blur-sm border border-slate-300/10">
-            {posterImage && (
+            {posterSrc && (
               <Image
-                src={posterImage.link}
-                alt={`Poster for ${anime.name}`}
+                src={posterSrc}
+                alt={`Poster for ${displayName}`}
                 fill
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 25vw, 25vw"
@@ -120,15 +159,15 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
             )}
           </div>
           <div className="mt-4 text-center md:text-left">
-            <h1 className="text-3xl font-bold text-white">{anime.name}</h1>
-            <p className="text-lg text-slate-400">{anime.year} | {anime.season}</p>
+            <h1 className="text-3xl font-bold text-white">{displayName}</h1>
+            <p className="text-lg text-slate-400 capitalize">{displayYear}{displaySeason ? ` | ${displaySeason}` : ''}</p>
           </div>
         </div>
 
         <div className="md:w-3/4">
           <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-lg shadow-lg border border-slate-300/10">
             <h2 className="text-xl font-semibold text-white mb-3">Sinopse</h2>
-            <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{anime.synopsis || "Sinopse não disponível."}</p>
+            <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{displaySynopsis || "Sinopse não disponível."}</p>
           </div>
 
           <div className="mt-8">
