@@ -480,7 +480,11 @@ async function fetchAnimeBatch(slugs: string[]): Promise<Map<string, CachedAnime
         const [atRes, jikanPoster] = await Promise.all([
           fetch(
             `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`,
-            { next: { revalidate: 86400 } }
+            {
+              next: { revalidate: 86400 },
+              headers: { 'User-Agent': 'AniSongs/1.0 (https://github.com/marioporfirio/anisongs)' },
+              signal: AbortSignal.timeout(8000),
+            }
           ).then(r => r.ok ? r.json() : null).catch(() => null),
           fetchJikanPoster(slug),
         ]);

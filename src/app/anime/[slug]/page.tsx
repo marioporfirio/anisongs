@@ -44,7 +44,10 @@ async function getAnimeDetails(slug: string): Promise<AnimeDetail> {
     const API_URL = `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`;
     let response: Response;
     try {
-        response = await fetch(API_URL, { next: { revalidate: 3600 } });
+        response = await fetch(API_URL, {
+            next: { revalidate: 3600 },
+            headers: { 'User-Agent': 'AniSongs/1.0 (https://github.com/marioporfirio/anisongs)' },
+        });
     } catch {
         throw new Error('Não foi possível conectar à API do AnimeThemes. Verifique sua conexão.');
     }

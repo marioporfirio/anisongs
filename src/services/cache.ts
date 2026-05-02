@@ -337,8 +337,8 @@ export async function fetchAnimeThemesApi<T>(
   const key = cacheKey || createCacheKey('api', endpoint, params?.toString() || '');
   
   return fetchWithCache<T>(url, key, undefined, {
-    // Configurações específicas para AnimeThemes API
-    signal: AbortSignal.timeout(30000), // 30 segundos timeout
+    signal: AbortSignal.timeout(30000),
+    headers: { 'User-Agent': 'AniSongs/1.0 (https://github.com/marioporfirio/anisongs)' },
   });
 }
 
