@@ -47,6 +47,18 @@ export default function RatingStars({
 
   const cacheKey = useMemo(() => `${animeSlug}-${themeSlug}`, [animeSlug, themeSlug]);
 
+  // Sync state when initial props change (e.g. home page loads ratings async after first render)
+  useEffect(() => {
+    if (!isSubmitting) {
+      setCurrentUserScore(initialUserScore ?? null);
+    }
+  }, [initialUserScore]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setCurrentAverageScore(initialAverageScore ?? null);
+    setCurrentRatingCount(initialRatingCount ?? 0);
+  }, [initialAverageScore, initialRatingCount]);
+
   const fetchDetails = useCallback(async () => {
     const cached = sessionStorage.getItem(`rating-${cacheKey}`);
     if (cached) {
