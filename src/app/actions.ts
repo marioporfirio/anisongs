@@ -413,3 +413,200 @@ export async function getUserRatings() {
     created_at: string;
   }[];
 }
+
+// --- Cache de dados do AnimeThemes ---
+
+interface CachedAnimeData {
+  name: string;
+  slug: string;
+  images: Array<{ facet: string; link: string }>;
+  animethemes: Array<{
+    id: number;
+    slug: string;
+    song: { title: string; artists?: Array<{ id: number; name: string; slug?: string }> } | null;
+    animethemeentries: Array<{ videos: Array<{ link: string }> }>;
+  }>;
+}
+
+async function fetchAnimeBatch(slugs: string[]): Promise<Map<string, CachedAnimeData>> {
+  if (slugs.length === 0) return new Map();
+
+  const cachedRows = await sql`
+    SELECT slug, data FROM anime_cache
+    WHERE slug = ANY(${slugs})
+    AND cached_at > NOW() - INTERVAL '24 hours'
+  `;
+
+  const result = new Map<string, CachedAnimeData>();
+  const cachedSlugs = new Set<string>();
+  for (const row of cachedRows) {
+    result.set(row.slug as string, row.data as CachedAnimeData);
+    cachedSlugs.add(row.slug as string);
+  }
+
+  const missingSlugs = slugs.filter(s => !cachedSlugs.has(s));
+  if (missingSlugs.length === 0) return result;
+
+  const CONCURRENT = 10;
+  for (let i = 0; i < missingSlugs.length; i += CONCURRENT) {
+    const batch = missingSlugs.slice(i, i + CONCURRENT);
+    const fetched = await Promise.all(
+      batch.map(async slug => {
+        try {
+          const res = await fetch(
+            `https://api.animethemes.moe/anime/${slug}?include=images,animethemes.song,animethemes.song.artists,animethemes.animethemeentries.videos`,
+            { next: { revalidate: 86400 } }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.anime ? { slug, anime: data.anime as CachedAnimeData } : null;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const item of fetched) {
+      if (!item) continue;
+      result.set(item.slug, item.anime);
+      await sql`
+        INSERT INTO anime_cache (slug, data, cached_at)
+        VALUES (${item.slug}, ${JSON.stringify(item.anime)}, NOW())
+        ON CONFLICT (slug) DO UPDATE
+          SET data = EXCLUDED.data, cached_at = NOW()
+      `;
+    }
+  }
+
+  return result;
+}
+
+export interface EnrichedTheme {
+  id: number;
+  slug: string;
+  song: { title: string; artists?: Array<{ id: number; name: string; slug?: string }> } | null;
+  animethemeentries: Array<{ videos: Array<{ link: string }> }>;
+  anime: { name: string; slug: string; images: Array<{ facet: string; link: string }> };
+}
+
+export interface TopThemeResult extends EnrichedTheme {
+  average_score: number;
+  rating_count: number;
+}
+
+export interface MyRatingResult extends EnrichedTheme {
+  user_score: number;
+  created_at: string;
+}
+
+export async function getTopThemesWithData(type: 'OP' | 'ED' | 'IN', limit = 100): Promise<TopThemeResult[]> {
+  const rows = await sql`
+    SELECT anime_slug, theme_slug,
+           ROUND(AVG(score)::numeric, 1) AS average_score,
+           COUNT(*)::int                  AS rating_count
+    FROM ratings
+    WHERE theme_slug LIKE ${type + '%'}
+    GROUP BY anime_slug, theme_slug
+    HAVING COUNT(*) >= 1
+    ORDER BY average_score DESC, rating_count DESC
+    LIMIT ${limit}
+  `;
+
+  if (rows.length === 0) return [];
+
+  const slugs = [...new Set(rows.map(r => r.anime_slug as string))];
+  const animeMap = await fetchAnimeBatch(slugs);
+
+  const results: TopThemeResult[] = [];
+  for (const row of rows) {
+    const animeSlug = row.anime_slug as string;
+    const themeSlug = row.theme_slug as string;
+    const anime = animeMap.get(animeSlug);
+
+    if (!anime) {
+      const name = animeSlug.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const label = themeSlug.startsWith('OP')
+        ? `Opening ${themeSlug.replace('OP', '') || '1'}`
+        : themeSlug.startsWith('ED')
+        ? `Ending ${themeSlug.replace('ED', '') || '1'}`
+        : `Insert Song ${themeSlug}`;
+      results.push({
+        id: results.length + 1,
+        slug: themeSlug,
+        song: { title: label, artists: [] },
+        animethemeentries: [],
+        anime: { name, slug: animeSlug, images: [] },
+        average_score: parseFloat(Number(row.average_score).toFixed(1)),
+        rating_count: Number(row.rating_count),
+      });
+      continue;
+    }
+
+    const theme = anime.animethemes?.find(t => t.slug === themeSlug);
+    if (!theme) continue;
+
+    results.push({
+      ...theme,
+      anime: { name: anime.name, slug: anime.slug, images: anime.images },
+      average_score: parseFloat(Number(row.average_score).toFixed(1)),
+      rating_count: Number(row.rating_count),
+    });
+  }
+
+  return results;
+}
+
+export async function getMyRatingsWithData(): Promise<MyRatingResult[]> {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+
+  const rows = await sql`
+    SELECT anime_slug, theme_slug, score, created_at
+    FROM ratings
+    WHERE user_id = ${session.user.id}
+    ORDER BY created_at DESC
+  `;
+
+  if (rows.length === 0) return [];
+
+  const slugs = [...new Set(rows.map(r => r.anime_slug as string))];
+  const animeMap = await fetchAnimeBatch(slugs);
+
+  const results: MyRatingResult[] = [];
+  for (const row of rows) {
+    const animeSlug = row.anime_slug as string;
+    const themeSlug = row.theme_slug as string;
+    const anime = animeMap.get(animeSlug);
+
+    if (!anime) {
+      const name = animeSlug.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const label = themeSlug.startsWith('OP')
+        ? `Opening ${themeSlug.replace('OP', '') || '1'}`
+        : themeSlug.startsWith('ED')
+        ? `Ending ${themeSlug.replace('ED', '') || '1'}`
+        : `Insert Song ${themeSlug}`;
+      results.push({
+        id: results.length + 1,
+        slug: themeSlug,
+        song: { title: label, artists: [] },
+        animethemeentries: [],
+        anime: { name, slug: animeSlug, images: [] },
+        user_score: Number(row.score),
+        created_at: row.created_at as string,
+      });
+      continue;
+    }
+
+    const theme = anime.animethemes?.find(t => t.slug === themeSlug);
+    if (!theme) continue;
+
+    results.push({
+      ...theme,
+      anime: { name: anime.name, slug: anime.slug, images: anime.images },
+      user_score: Number(row.score),
+      created_at: row.created_at as string,
+    });
+  }
+
+  return results;
+}

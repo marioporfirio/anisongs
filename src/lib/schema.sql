@@ -68,3 +68,12 @@ CREATE TABLE IF NOT EXISTS playlist_collaborators (
 
 CREATE INDEX IF NOT EXISTS idx_collaborators_user_id ON playlist_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS idx_collaborators_playlist_id ON playlist_collaborators(playlist_id);
+
+-- Cache de dados do AnimeThemes (imagens, temas, vídeos) por 24h
+CREATE TABLE IF NOT EXISTS anime_cache (
+  slug TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  cached_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_anime_cache_cached_at ON anime_cache(cached_at);
