@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useOnClickOutside } from '@/hooks/useOnClickOutside';
-import { getUserPlaylists, addThemeToPlaylist, createPlaylist } from '@/app/actions'; // Added createPlaylist
+import { getUserPlaylists, addThemeToPlaylist, createPlaylistWithId } from '@/app/actions';
 
 interface AddToPlaylistButtonProps {
   themeId: number;
@@ -119,24 +119,29 @@ export default function AddToPlaylistButton({ themeId }: AddToPlaylistButtonProp
 
   const handleCreatePlaylist = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!newPlaylistName.trim()) {
-      alert("O nome da playlist não pode estar vazio.");
-      return;
-    }
+    if (!newPlaylistName.trim()) return;
     setIsCreating(true);
-    const formData = new FormData();
-    formData.append('name', newPlaylistName.trim());
-
     try {
-      await createPlaylist(formData); 
+      const result = await createPlaylistWithId(newPlaylistName.trim());
+
+      if (!result.success || !result.id) {
+        console.error('Erro ao criar playlist:', result.message);
+        return;
+      }
+
+      // Adiciona a música à playlist recém-criada
+      const addData = new FormData();
+      addData.append('playlistId', result.id.toString());
+      addData.append('themeId', themeId.toString());
+      await addThemeToPlaylist(addData);
+
       setNewPlaylistName('');
       setShowCreateForm(false);
-      await fetchPlaylists();
+      setIsOpen(false);
       setIsAdded(true);
       setTimeout(() => setIsAdded(false), 2000);
     } catch (error) {
-      console.error("Erro ao criar playlist:", error);
-      alert(error instanceof Error ? error.message : "Não foi possível criar a playlist.");
+      console.error('Erro ao criar playlist:', error);
     } finally {
       setIsCreating(false);
     }

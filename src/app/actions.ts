@@ -262,17 +262,17 @@ export async function addThemeToPlaylist(formData: FormData) {
   }
 }
 
-// Criar playlist
+// Criar playlist (form action — retorno void para compatibilidade com <form action>)
 export async function createPlaylist(formData: FormData): Promise<void> {
   const session = await auth();
-  if (!session?.user?.id) throw new Error('Usuário não autenticado.');
+  if (!session?.user?.id) return;
 
   const validated = PlaylistSchema.safeParse({
     name: formData.get('name'),
     description: formData.get('description'),
     isPublic: formData.get('isPublic') === 'on',
   });
-  if (!validated.success) throw new Error('Dados inválidos.');
+  if (!validated.success) return;
 
   const { name, description, isPublic } = validated.data;
 
@@ -282,6 +282,28 @@ export async function createPlaylist(formData: FormData): Promise<void> {
   `;
 
   revalidatePath('/playlists');
+}
+
+// Criar playlist retornando o ID — usada pelo AddToPlaylistButton
+export async function createPlaylistWithId(name: string): Promise<{ success: boolean; id?: number; message?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, message: 'Usuário não autenticado.' };
+
+    if (!name.trim()) return { success: false, message: 'Nome inválido.' };
+
+    const rows = await sql`
+      INSERT INTO playlists (user_id, name, description, is_public)
+      VALUES (${session.user.id}, ${name.trim()}, null, false)
+      RETURNING id
+    `;
+
+    revalidatePath('/playlists');
+    return { success: true, id: rows[0].id as number };
+  } catch (error) {
+    console.error('createPlaylistWithId error:', error);
+    return { success: false, message: 'Erro ao criar playlist.' };
+  }
 }
 
 // Deletar playlist
